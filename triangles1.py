@@ -646,6 +646,7 @@ class TrianglesApp:
             self.label3 = Label(text="Game Over", fg=self.lcolors[winner], font=("Helvetica", 18))
             self.label3.place(x=150,y=70)            
         elif self.players[self.Board.currentPlayer] == 1:
+            self.canvas.update()
             self.l1 = self.ai.go(self.Board)
             if self.l1 != None:
                 self.Board.make_move(self.l1) 
