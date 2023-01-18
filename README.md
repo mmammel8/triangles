@@ -1,0 +1,2 @@
+# triangles
+Triangles strategy game
