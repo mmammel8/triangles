@@ -256,7 +256,7 @@ static gboolean button_release_event_cb(GtkWidget *widget,
 		{
 			bd1->make_move(l1);
 			display_move(widget, l1);
-			std::cout << "mark move " << l1 << std::endl; 
+			//std::cout << "mark move " << l1 << std::endl; 
 		}
 	}
 
@@ -349,8 +349,8 @@ int main(int argc, char **argv)
 	int status;
 	
 	bd1 = new Tboard();
-	//bd1->rand_start();
-	bd1->test_start();
+	bd1->rand_start();
+	//bd1->test_start();
 	bd1->init();
 	bd1->clear();	
 	ai1 = new AI();	

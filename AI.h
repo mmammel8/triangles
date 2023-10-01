@@ -25,9 +25,9 @@ public:
 	const double PINF = 1.0e+15;
 	const double NINF = -1.0e+15;
 	const double EPS = 0.00001;
-	const int MAXDEPTH1 = 12; //limit depth of search in threat
-	const int MAXDEPTH2 = 2; //regular depth of search
-	const int MAXBREADTH = 24;		
+	const int MAXDEPTH1 = 18; //limit depth of search in threat
+	const int MAXDEPTH2 = 5; //regular depth of search
+	const int MAXBREADTH = 640;		
 	Tboard *aiBoard, *mcBoard;
 	double bscr;
 	int bmove;

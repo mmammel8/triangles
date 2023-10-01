@@ -253,6 +253,7 @@ void Tboard::init()
 				linenum[i][j] = linenum[j][i] = linect;
 				lines[linect][0] = i;
 				lines[linect][1] = j;
+				//std::cout << i << "," << j << ":" << linect << "::" << points[i].x << ","  << points[i].y << ","  << points[j].x << ","  << points[j].y << std::endl;
 				linect++;
 			}
 	trict = 0;

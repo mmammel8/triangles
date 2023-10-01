@@ -54,7 +54,7 @@ double AI::MinValue(double alpha, double beta, int depth)
 	lastmv = min(nmove, MAXBREADTH);
 	for (int k = 0; k < nmove; ++k)
 		idx[k] = k;	
-	std::sort(idx, idx + nmove, [&scorelist](int i, int j) {return scorelist[i] > scorelist[j];});
+	std::sort(idx, idx + nmove, [&scorelist](int i, int j) {return scorelist[i] > scorelist[j];});	
 	if (nmove == 0)
 	{
 		//pass
@@ -69,13 +69,14 @@ double AI::MinValue(double alpha, double beta, int depth)
 		for (mvi = 0; mvi < lastmv; ++mvi)
 		{	
 			//if (depth == 1)
-			//	std::cout << mvi << "," << movelist[mv] << "," << scorelist[mv] << std::endl;
 			mv = movelist[idx[mvi]];
+			//std::cout << "AAA " << mvi << "," << movelist[idx[mvi]] << "," << scorelist[idx[mvi]] << std::endl;			
 			aiBoard->make_move(mv); //make the move on the current board
 			threat[depth] = aiBoard->trimade;
 			if (depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth])) // || (depth == MAXDEPTH2 && threat[depth-1])))
 			{ 
-				v = MaxValue(alpha, beta, depth+1);			
+				v = MaxValue(alpha, beta, depth+1);	
+				//std::cout << depth << "::" << v << std::endl;		
 				if (v <= NINF + EPS)
 				{
 					//no more moves from here
@@ -85,7 +86,8 @@ double AI::MinValue(double alpha, double beta, int depth)
 			else
 			{
 				v = aiBoard->get_score1(); // + get_playout() / 20.0;
-				std::cout << depth << "::" << v << std::endl;
+				//
+				//std::cout << depth << "::" << v << std::endl;
 			}
 			aiBoard->remove(mv); //undo move  
 			//aiBoard.display()
@@ -97,17 +99,17 @@ double AI::MinValue(double alpha, double beta, int depth)
 				{ 
 					bmove = mv;
 					bscr = v;
-					std::cout << bmove << ";" << mvi << ";"  << idx[mvi] << ";"  << scorelist[mvi] << std::endl;			
+					//std::cout << bmove << ";" << mvi << ";"  << bscr << std::endl;			
 				}
 			}
 			if (minV <= alpha)
 			{
-				std::cout <<  "mincu " << minV << "," << alpha<< "," << beta<< "," << depth << std::endl;
+				//std::cout <<  "mincu " << minV << "," << alpha<< "," << beta<< "," << depth << std::endl;
 				return minV; //cutoff
 			}
 			if (minV < beta)
 				beta = minV;
-			std::cout << depth << ":v " << v << ",a " << alpha << ",b " << beta << ",m " << minV << std::endl;					
+			//std::cout << depth << ":v " << v << ",a " << alpha << ",b " << beta << ",m " << minV << std::endl;					
 		}
 	}
 	//print "minou", minV, alpha, beta, depth
@@ -126,10 +128,11 @@ double AI::MaxValue(double alpha, double beta, int depth)
 		maxDepth = depth;
 	maxV = NINF;
 	nmove = aiBoard->generate_moves(movelist, scorelist);
-	std::sort(movelist, movelist + nmove, [&scorelist](int i, int j) {return scorelist[i] > scorelist[j];});
-	lastmv = min(nmove, MAXBREADTH);
 	for (int k = 0; k < nmove; ++k)
-		idx[k] = k;
+		idx[k] = k;		
+	std::sort(idx, idx + nmove, [&scorelist](int i, int j) {return scorelist[i] > scorelist[j];});
+	lastmv = min(nmove, MAXBREADTH);
+					
 	if (nmove == 0)
 	{
 		//pass
@@ -143,13 +146,14 @@ double AI::MaxValue(double alpha, double beta, int depth)
 	{ 	
 		for (mvi = 0; mvi < lastmv; ++mvi)
 		{
-			mv = movelist[idx[mvi]];		
+			mv = movelist[idx[mvi]];	
+			//std::cout << "BBB " << mvi << "," << movelist[idx[mvi]] << "," << scorelist[idx[mvi]] << std::endl;		
 			aiBoard->make_move(mv); //make the move on the current board
 			threat[depth] = aiBoard->trimade;
 			if (depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth]))// || (depth == MAXDEPTH2 && threat[depth-1])))
 			{ 
 				v = MinValue(alpha, beta, depth+1);
-				std::cout << depth << ":" << v << std::endl;
+				//std::cout << depth << ":" << v << std::endl;
 				if (v >= PINF - EPS)
 				{
 					//no more moves from here
@@ -159,7 +163,7 @@ double AI::MaxValue(double alpha, double beta, int depth)
 			else
 			{
 				v = aiBoard->get_score1(); //+ get_playout() / 20.0;
-				std::cout << depth << "::" << v << std::endl;
+				////std::cout << depth << ":m:" << mv << "::V::" << v << std::endl;
 			}
 			aiBoard->remove(mv); //undo move  
 			//aiBoard.display()
