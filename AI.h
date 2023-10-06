@@ -26,11 +26,12 @@ public:
 	const double NINF = -1.0e+15;
 	const double EPS = 0.00001;
 	const int MAXDEPTH1 = 18; //limit depth of search in threat
-	const int MAXDEPTH2 = 5; //regular depth of search
+	const int MAXDEPTH2 = 4; //regular depth of search
 	const int MAXBREADTH = 640;		
 	Tboard *aiBoard, *mcBoard;
 	double bscr;
 	int bmove;
+	bool halt;
 	
 protected:
 	bool threat[256]; //(MAXLINES)

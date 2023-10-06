@@ -253,7 +253,7 @@ void Tboard::init()
 				linenum[i][j] = linenum[j][i] = linect;
 				lines[linect][0] = i;
 				lines[linect][1] = j;
-				//std::cout << i << "," << j << ":" << linect << "::" << points[i].x << ","  << points[i].y << ","  << points[j].x << ","  << points[j].y << std::endl;
+				//cout << i << "," << j << ":" << linect << "::" << points[i].x << ","  << points[i].y << ","  << points[j].x << ","  << points[j].y << endl;
 				linect++;
 			}
 	trict = 0;
@@ -336,6 +336,7 @@ void Tboard::clear()
  		tricolor[i] = 0;
  	}
  	trimade = false;
+ 	lastturn = 0;
  	zhash = 0;
 }
 
@@ -437,6 +438,64 @@ double Tboard::get_score2(int line1)
 
 	return scr;
 }
+	
+bool Tboard::rewind()
+{
+	int line1;
+	int savelast = lastturn;
+	
+	if (turn < 1)
+		return false;	
+	while (turn > 0)
+	{
+		line1 = history[turn - 1];
+		remove(line1);
+	}
+	lastturn = savelast;
+	return true;
+	
+}
+
+bool Tboard::ffwd()
+{
+	int line1, savelast;
+
+	if (turn > lastturn)
+		return false;	
+	while (turn <= lastturn)
+	{
+		savelast = lastturn;	
+		line1 = history[turn];
+		make_move(line1);
+		lastturn = savelast;
+	}
+	return true;
+
+}
+
+bool Tboard::back()
+{
+	if (turn < 1)
+		return false;
+	int line1 = history[turn - 1];
+	int savelast = lastturn;
+	remove(line1);
+	lastturn = savelast;
+	return true;
+	
+}
+
+bool Tboard::ahead()
+{
+	if (turn > lastturn)
+		return false;
+	int line1 = history[turn];
+	int savelast = lastturn;
+	make_move(line1);
+	lastturn = savelast;
+	return true;
+	
+}
 		
 void Tboard::make_move(int line1)
 {
@@ -458,6 +517,7 @@ void Tboard::make_move(int line1)
 			zhash ^= zobrist2[tr][currentPlayer-1];
 		}
 	}
+	lastturn = turn;	
 	history[turn++] = line1;
 	currentPlayer = 3 - currentPlayer;
 }
@@ -468,6 +528,7 @@ void Tboard::remove(int line1)
 	//updates triangles
 	int tr;
 	turn--;
+	lastturn = turn - 1;
 	currentPlayer = 3 - currentPlayer;	
 	linecolor[line1] = 0;
 	zhash ^= zobrist1[line1][currentPlayer-1];
@@ -549,7 +610,7 @@ bool Tboard::Read()
 {
 	ifstream fin;
 	string line1;
-	int x, y;
+	int x, y, nmoves;
 	char ch;
 	
 	fin.open(fnameIn);
@@ -571,39 +632,61 @@ bool Tboard::Read()
 		getline(fin, line1);
 		stringstream stream1(line1);
 		stream1 >> x >> ch >> y;
-		//printf("%d %d\n", x, y);		
+		//printf("pt %d %d\n", x, y);		
 		points[i].x = x;
 		points[i].y = y;
 	}
     init();
     clear();
 	
-	getline(fin, line1); //linecolor	
-	getline(fin, line1);
-	stringstream stream1(line1);
-	for (int i = 0; i < numlines; ++i)
-	{	
-		stream1 >> x >> ch;	
-		linecolor[i] = x;
-	}
-	getline(fin, line1); //tricolor	
 	getline(fin, line1);
 	stringstream stream2(line1);
-	for (int i = 0; i < numtri; ++i)
-	{	
-		stream2 >> x >> ch;	
-		tricolor[i] = x;
-	}	
-	getline(fin, line1); //trifilled
-	getline(fin, line1);
-	stringstream stream3(line1);
-	for (int i = 0; i < numtri; ++i)
-	{	
-		stream3 >> x >> ch;	
-		trifilled[i] = x;
-	}
+	stream2 >> x;
+	nmoves = x;
+	
+	for (int i = 0; i < nmoves; ++i)
+	{
+		getline(fin, line1);
+		stringstream stream3(line1);
+		stream3 >> x >> ch >> y;
+		//printf("ll %d %d\n", x, y);
+		int line1 = linenum[x][y];
+		make_move(line1);
+	}				
 	fin.close();
-	//printf("%d %d\n", linecolor[numlines-1], trifilled[numtri-1]);		
+	return true;
+}
+
+bool Tboard::savetodisk()
+{
+	int col,row;
+	int leading, xs, os;
+	string out;
+	ofstream outfile;
+	//string fnameOut = "out" + to_string((long long)N) + "uct.txt";
+
+	outfile.open(fnameIn);
+	outfile << "Triangles game" << endl;
+	out = to_string(NUMPOINTS) + " points, " + to_string(numlines) + " lines, " + to_string(numtri) + " triangles";
+	outfile << out << endl;
+	out = to_string(currentPlayer) + " currentPlayer, " + to_string(turn) + " turn, " + to_string(score[1]) + " score1, " + to_string(score[2]) + " score2";
+	outfile << out << endl;
+	outfile << "Points" << endl;
+	for (int i = 0; i < NUMPOINTS; ++i)
+	{
+		out = to_string(points[i].x) + ", " + to_string(points[i].y);
+		outfile << out << endl;
+	}
+	out = to_string(turn) + " moves";
+	outfile << out << endl;
+	for (int i = 0; i < turn; ++i)
+	{
+		int l1 = history[i];
+		out = to_string(lines[l1][0]) + '-' + to_string(lines[l1][1]);
+		outfile << out << endl;
+	}
+	outfile.close();
+	
 	return true;
 }
 

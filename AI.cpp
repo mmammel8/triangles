@@ -73,7 +73,7 @@ double AI::MinValue(double alpha, double beta, int depth)
 			//std::cout << "AAA " << mvi << "," << movelist[idx[mvi]] << "," << scorelist[idx[mvi]] << std::endl;			
 			aiBoard->make_move(mv); //make the move on the current board
 			threat[depth] = aiBoard->trimade;
-			if (depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth])) // || (depth == MAXDEPTH2 && threat[depth-1])))
+			if (!halt && depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth])) // || (depth == MAXDEPTH2 && threat[depth-1])))
 			{ 
 				v = MaxValue(alpha, beta, depth+1);	
 				//std::cout << depth << "::" << v << std::endl;		
@@ -150,7 +150,7 @@ double AI::MaxValue(double alpha, double beta, int depth)
 			//std::cout << "BBB " << mvi << "," << movelist[idx[mvi]] << "," << scorelist[idx[mvi]] << std::endl;		
 			aiBoard->make_move(mv); //make the move on the current board
 			threat[depth] = aiBoard->trimade;
-			if (depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth]))// || (depth == MAXDEPTH2 && threat[depth-1])))
+			if (!halt && depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth]))// || (depth == MAXDEPTH2 && threat[depth-1])))
 			{ 
 				v = MinValue(alpha, beta, depth+1);
 				//std::cout << depth << ":" << v << std::endl;
@@ -201,8 +201,8 @@ void AI::ABSearch()
 		bscr = MinValue(NINF,PINF,1);
 	auto stop = chrono::high_resolution_clock::now();
 	auto duration = chrono::duration_cast<chrono::milliseconds>(stop - start);
-	std::cout << duration.count() << std::endl;
-	printf("count: %d\n", count);
+	printf("score: %f, depth: %d, nodes: %d,",bscr, maxDepth, count);
+	std::cout << " time: " << duration.count() << std::endl;	
 }
 		
 int AI::randMove()
@@ -224,6 +224,7 @@ int AI::go(Tboard *board0)
 	bmove = -1;
 	bscr = NINF;
 	maxDepth = 0;
+	halt = false;
 	for (int i = 0; i < aiBoard->MAXLINES; ++i)
 		threat[i] = false;
 	threat[0] = true;		
@@ -242,8 +243,6 @@ int AI::go(Tboard *board0)
 	ABSearch();
 	//else:
 	//self.MonteCarloMove()
-	printf("%f, %d\n",bscr, maxDepth);
-
 	
 	return bmove;
 }

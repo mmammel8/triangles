@@ -55,9 +55,10 @@ public:
 	static unsigned int zobrist1[MAXLINES][2]; //zobrist hash [lines][2]
 	static unsigned int zobrist2[MAXTRIANGLES][2]; //zobrist hash [triangles][2]	
 	
-	int linect, trict, turn;
+	int linect, trict, turn, lastturn;
 	bool trimade;
-	std::string fnameIn = "/home/markmammel/Python/Triangles_game.txt";
+	int score[3];
+	std::string fnameIn = "Triangles_game.txt";
 	char currentPlayer, winner; 
 	char linecolor[MAXLINES]; //0, 1, 2 player
 	char trifilled[MAXTRIANGLES]; //0,1,2,3 sides
@@ -65,7 +66,6 @@ public:
 protected:
 	unsigned int xr,yr,zr,cr;
 	int numlines, numtri;
-	int score[3];
 	int history[MAXLINES]; //list of lines	
 	unsigned int zhash;
 
@@ -90,6 +90,10 @@ public:
 	bool legalline(int l1);
 	double get_score1();
 	double get_score2(int line1);
+	bool rewind();
+	bool ffwd();
+	bool back();
+	bool ahead();
 	void make_move(int line1);
 	void remove(int line1);
 	int generate_moves(int *linelist, double *scorelist);
@@ -97,6 +101,7 @@ public:
 	int rand_move();
 	void playout();
 	bool Read();
+	bool savetodisk();
 
 };
 #endif // !defined
