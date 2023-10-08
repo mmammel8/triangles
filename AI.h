@@ -25,8 +25,8 @@ public:
 	const double PINF = 1.0e+15;
 	const double NINF = -1.0e+15;
 	const double EPS = 0.00001;
-	const int MAXDEPTH1 = 18; //limit depth of search in threat
-	const int MAXDEPTH2 = 4; //regular depth of search
+	int MAXDEPTH1 = 10; //limit depth of search in threat
+	int MAXDEPTH2 = 6; //regular depth of search
 	const int MAXBREADTH = 640;		
 	Tboard *aiBoard, *mcBoard;
 	double bscr;
@@ -37,6 +37,7 @@ protected:
 	bool threat[256]; //(MAXLINES)
 	int maxDepth,nthreat,count;
 	unsigned int xr,yr,zr,cr;
+	std::unordered_map<unsigned int, double> zmap; 
 
 // Operations
 public:

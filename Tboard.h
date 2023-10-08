@@ -58,6 +58,7 @@ public:
 	int linect, trict, turn, lastturn;
 	bool trimade;
 	int score[3];
+	unsigned int zhash;
 	std::string fnameIn = "Triangles_game.txt";
 	char currentPlayer, winner; 
 	char linecolor[MAXLINES]; //0, 1, 2 player
@@ -67,7 +68,6 @@ protected:
 	unsigned int xr,yr,zr,cr;
 	int numlines, numtri;
 	int history[MAXLINES]; //list of lines	
-	unsigned int zhash;
 
 // Operations
 public:

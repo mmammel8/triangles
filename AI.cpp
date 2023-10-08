@@ -1,4 +1,5 @@
 #include "AI.h"
+#include <unordered_map> 
 using namespace std;
 
 AI::AI()
@@ -45,6 +46,7 @@ double AI::MinValue(double alpha, double beta, int depth)
 	int nmove, mv, lastmv, mvi;
 	int movelist[aiBoard->MAXLINES], idx[aiBoard->MAXLINES];
 	double scorelist[aiBoard->MAXLINES];
+	unordered_map<unsigned int,double>::const_iterator zptr;
 	
 	count++;
 	if (depth > maxDepth)
@@ -73,9 +75,18 @@ double AI::MinValue(double alpha, double beta, int depth)
 			//std::cout << "AAA " << mvi << "," << movelist[idx[mvi]] << "," << scorelist[idx[mvi]] << std::endl;			
 			aiBoard->make_move(mv); //make the move on the current board
 			threat[depth] = aiBoard->trimade;
-			if (!halt && depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth])) // || (depth == MAXDEPTH2 && threat[depth-1])))
+			if (!halt && depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth] || threat[depth-1]))
 			{ 
-				v = MaxValue(alpha, beta, depth+1);	
+				zptr = zmap.find(aiBoard->zhash);
+				if (zptr != zmap.end())
+				{
+					v = zptr->second;
+				}
+				else
+				{
+					v = MaxValue(alpha, beta, depth+1);	
+					zmap[aiBoard->zhash] = v;
+				}
 				//std::cout << depth << "::" << v << std::endl;		
 				if (v <= NINF + EPS)
 				{
@@ -122,6 +133,7 @@ double AI::MaxValue(double alpha, double beta, int depth)
 	int nmove, mv, lastmv, mvi;
 	int movelist[aiBoard->MAXLINES], idx[aiBoard->MAXLINES];
 	double scorelist[aiBoard->MAXLINES];
+	unordered_map<unsigned int,double>::const_iterator zptr;
 
 	count++;
 	if (depth > maxDepth)
@@ -150,9 +162,18 @@ double AI::MaxValue(double alpha, double beta, int depth)
 			//std::cout << "BBB " << mvi << "," << movelist[idx[mvi]] << "," << scorelist[idx[mvi]] << std::endl;		
 			aiBoard->make_move(mv); //make the move on the current board
 			threat[depth] = aiBoard->trimade;
-			if (!halt && depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth]))// || (depth == MAXDEPTH2 && threat[depth-1])))
+			if (!halt && depth < MAXDEPTH1 && (depth < MAXDEPTH2 || threat[depth] || threat[depth-1]))
 			{ 
-				v = MinValue(alpha, beta, depth+1);
+				zptr = zmap.find(aiBoard->zhash);			
+				if (zptr != zmap.end())
+				{
+					v = zptr->second;
+				}
+				else
+				{			
+					v = MinValue(alpha, beta, depth+1);
+					zmap[aiBoard->zhash] = v;
+				}
 				//std::cout << depth << ":" << v << std::endl;
 				if (v >= PINF - EPS)
 				{
@@ -194,11 +215,20 @@ void AI::ABSearch()
 	bscr = NINF;
 	bmove = -1;
 	count = 0;
+	zmap.clear();
 	auto start = chrono::high_resolution_clock::now();
 	if (aiBoard->currentPlayer == 1) 
+	{
+		//MAXDEPTH1 = 18; //limit depth of search in threat
+		//MAXDEPTH2 = 4; //regular depth of search		
 		bscr = MaxValue(NINF,PINF,1);
+	}
 	else
+	{
+		//MAXDEPTH1 = 24; //limit depth of search in threat
+		//MAXDEPTH2 = 6; //regular depth of search		
 		bscr = MinValue(NINF,PINF,1);
+	}
 	auto stop = chrono::high_resolution_clock::now();
 	auto duration = chrono::duration_cast<chrono::milliseconds>(stop - start);
 	printf("score: %f, depth: %d, nodes: %d,",bscr, maxDepth, count);

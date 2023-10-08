@@ -193,13 +193,8 @@ void *CUCT( void *threadid )
 	pthread_exit(NULL);	
 }
 
-void display_move(GtkWidget *widget, int line1)
+bool display_move(GtkWidget *widget, int line1)
 {
-	const int NUM_THREADS = 1;
-	long t;
-	int rc;
-	void *status;
-	pthread_t thread[NUM_THREADS];
 	char labscr[16];
 	int movelist[bd1->MAXLINES], nmoves;
 	int player = 3 - bd1->currentPlayer; //already incremented player
@@ -233,21 +228,18 @@ void display_move(GtkWidget *widget, int line1)
 	gtk_label_set_text(GTK_LABEL (button12), labscr);
 	if (bd1->currentPlayer == 1)
 	{
-		draw_circle(widget, 100, 10, 1);
-		draw_circle(widget, 700, 10, 0);		
+		draw_circle(widget, 100, 0, 1);
+		draw_circle(widget, 700, 0, 0);		
 	}
 	else
 	{
-		draw_circle(widget, 100, 10, 0);
-		draw_circle(widget, 700, 10, 2);
+		draw_circle(widget, 100, 0, 0);
+		draw_circle(widget, 700, 0, 2);
 	}
-	gtk_widget_queue_draw(widget);
-	while (gtk_events_pending())
-  		gtk_main_iteration();	
+	
 	std::cout << "turn: " << bd1->turn << ", moves left: " << nmoves << std::endl;
 
-	/* invalidate the affected region of the drawing area. */
-	//gtk_widget_queue_draw_area(widget, 0, 0, bd1->CWIDTH, bd1->CWIDTH);	
+	
 	if (nmoves == 0)
 	{
 		winner = bd1->get_winner();
@@ -268,43 +260,60 @@ void display_move(GtkWidget *widget, int line1)
 			gtk_label_set_text(GTK_LABEL (button11), labscr);		
 		}
 	}
-	else if (players[bd1->currentPlayer] == 1)
-	{
-		//canvas.update()
+
 		//gtk_widget_set_sensitive(button9, false);	
 		//gtk_widget_set_sensitive(button10, true);
 		//gtk_widget_queue_draw(widget);
-		usleep(2000);	
-		//int line2 = ai1->go(bd1);
-		
-		//std::cout << "ai " << line2 << std::endl;
-		rc = pthread_create(&thread[0], NULL, CUCT, (void *)t);
-		if (rc) 
-		{
-			printf("ERROR; return code from pthread_create() is %d\n", rc);
-			exit(-1);
-		}		
-		rc = pthread_join(thread[0], &status);
-		if (rc) 
-		{
-			printf("ERROR; return code from pthread_join() is %d\n", rc);
-			exit(-1);
-		}		
-		int line2 = ai1->bmove;
-		
-		if (line2 > -1)
-		{
-			bd1->make_move(line2);
-			display_move(widget, line2);
-		}
+		//usleep(200);	
+		gtk_widget_queue_draw(widget);
+		/* invalidate the affected region of the drawing area. */
+		gtk_widget_queue_draw_area(widget, 0, 0, bd1->CWIDTH, bd1->CWIDTH);	
+		while (gtk_events_pending())
+  			gtk_main_iteration();
+
 		//gtk_widget_set_sensitive(button9, true);	
 		//gtk_widget_set_sensitive(button10, false);	
-	}
+
 	gtk_widget_set_sensitive(button5, true);
 	gtk_widget_set_sensitive(button6, true);
 	gtk_widget_set_sensitive(button7, false);
 	gtk_widget_set_sensitive(button8, false);
+	
+	return (nmoves > 0);
 
+}
+	
+static bool ai_go(GtkWidget *widget, gpointer data)
+{
+	int rc;
+	void *status;
+	const int NUM_THREADS = 1;
+	long t;
+
+	while (gtk_events_pending ())
+	  gtk_main_iteration ();
+	pthread_t thread[NUM_THREADS];	
+	players[bd1->currentPlayer] = 1; //auto move next time
+	t = 1;
+	rc = pthread_create(&thread[0], NULL, CUCT, (void *)t);
+	if (rc) 
+	{
+		printf("ERROR; return code from pthread_create() is %d\n", rc);
+		exit(-1);
+	}		
+	rc = pthread_join(thread[0], &status);
+	if (rc) 
+	{
+		printf("ERROR; return code from pthread_join() is %d\n", rc);
+		exit(-1);
+	}		
+	int line2 = ai1->bmove;
+	if (line2 > -1)
+	{
+		bd1->make_move(line2);
+		display_move(widget, line2);
+	}	
+	return FALSE;	
 }
 			
 /* Handle button press events by either drawing a rectangle
@@ -360,7 +369,10 @@ static gboolean button_release_event_cb(GtkWidget *widget,
 		{
 			bd1->make_move(l1);
 			display_move(widget, l1);
+			//if (display_move(widget, l1))
 			//std::cout << "mark move " << l1 << std::endl; 
+			//	if (players[bd1->currentPlayer] == 1)
+			//		g_timeout_add_seconds(1, (GSourceFunc) ai_go(widget, data), NULL);
 		}
 	}
 
@@ -379,6 +391,12 @@ static gboolean motion_notify_event_cb(GtkWidget *widget,
 
 	//if (event->state & GDK_BUTTON1_MASK)
 	//	draw_line(widget, event->x, event->y);
+	if (players[bd1->currentPlayer] == 1 && winner == -1)
+	{
+		players[bd1->currentPlayer] == 0;
+		ai_go(widget, data);
+		players[bd1->currentPlayer] == 1;		
+	}
 
 	return TRUE;
 }
@@ -466,6 +484,7 @@ static void new_game(GtkWidget *widget, gpointer data)
 	bd1->clear();
 	players[1] = 0;
 	players[2] = 0;	
+	winner = -1;
 	gtk_widget_set_sensitive(button5, false);
 	gtk_widget_set_sensitive(button6, false);
 	gtk_widget_set_sensitive(button7, false);
@@ -479,7 +498,8 @@ static void xload(GtkWidget *widget, gpointer data)
 	if (bd1->Read())
 	{
 		players[1] = 0;
-		players[2] = 0;		
+		players[2] = 0;	
+		winner = -1;			
 		gtk_widget_set_sensitive(button5, true);
 		gtk_widget_set_sensitive(button6, true);
 		gtk_widget_set_sensitive(button7, false);
@@ -494,24 +514,13 @@ static void xsave(GtkWidget *widget, gpointer data)
 	bd1->savetodisk();
 }
 
-static void ai_go(GtkWidget *widget, gpointer data)
-{
-	players[bd1->currentPlayer] = 1; //auto move next time
-	int line1 = ai1->go(bd1);
-	if (line1 > -1)
-	{
-		bd1->make_move(line1);
-		display_move(widget, line1);
-	}
-}
-
 static void ai_stop(GtkWidget *widget, gpointer data)
 {
+
 	ai1->halt = true;
 	players[1] = 0;
 	players[2] = 0;
 }
-
 
 static void activate(GtkApplication *app, gpointer user_data)
 {
@@ -629,6 +638,7 @@ int main(int argc, char **argv)
 	ai1 = new AI();	
 	players[1] = 0;
 	players[2] = 0;
+	winner = -1;
 
 	app = gtk_application_new("org.gtk.triangles", G_APPLICATION_FLAGS_NONE);
 	g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -636,6 +646,7 @@ int main(int argc, char **argv)
 	g_object_unref(app);
 	
 	delete bd1;
+	delete ai1;
 
 	//pthread_exit(NULL);
 	return status;
