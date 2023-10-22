@@ -36,8 +36,8 @@ public:
 	static const int CWIDTH = 800; //width of board
 	static const int CHEIGHT = 600; //height of board
 	static const int BUFFERDIST = 80; //minimum distance between points
-	static const int LWIDTH = 4; //line width
-	static const int PRADIUS = 9; //point radius
+	static const int LWIDTH = 3; //line width
+	static const int PRADIUS = 8; //point radius
 	static const int CLICKRAD = 15; //within this of point to accept click
 	static const int MAXLINES = NUMPOINTS * (NUMPOINTS-1) / 2;
 	static const int MAXTRIANGLES = NUMPOINTS * (NUMPOINTS-1)  * (NUMPOINTS-2) / 6;	
@@ -60,7 +60,7 @@ public:
 	int score[3];
 	unsigned int zhash;
 	std::string fnameIn = "Triangles_game.txt";
-	char currentPlayer, winner; 
+	int currentPlayer, winner; 
 	char linecolor[MAXLINES]; //0, 1, 2 player
 	char trifilled[MAXTRIANGLES]; //0,1,2,3 sides
 	char tricolor[MAXTRIANGLES]; //0, 1, 2 player		
@@ -99,6 +99,7 @@ public:
 	int generate_moves(int *linelist, double *scorelist);
 	int generate_moves(int *linelist);
 	int rand_move();
+	void playout2();	
 	void playout();
 	bool Read();
 	bool savetodisk();

@@ -585,7 +585,7 @@ int Tboard::rand_move()
 	return l1;
 }
 
-void Tboard::playout()
+void Tboard::playout2()
 {
 	//random playout until triangle made or maxmoves
 	const int MAXMV = 12;
@@ -605,6 +605,21 @@ void Tboard::playout()
 			mades = 0;			
 	}
 }
+
+void Tboard::playout()
+{
+	//random playout
+	int mv = 0;
+	int l1 = 0;
+	while (l1 > -1)
+	{
+		l1 = rand_move();
+		if (l1 > -1)
+			make_move(l1);
+		mv++;		
+	}
+}
+
 
 bool Tboard::Read()
 {

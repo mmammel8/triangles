@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include "Tboard.h"
 #include "AI.h"
-//g++ `pkg-config --cflags gtk+-3.0` -o h AI.cpp Tboard.cpp triangles.cpp `pkg-config --libs gtk+-3.0`
+//g++ `pkg-config --cflags gtk+-3.0` -O3 -o h AI.cpp Tboard.cpp triangles.cpp `pkg-config --libs gtk+-3.0`
 
 //globals
 Tboard *bd1;
