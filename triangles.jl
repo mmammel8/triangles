@@ -13,24 +13,33 @@ MAXDEPTH2 = 2 #regular depth of search
 MAXBREADTH = 24
 
 struct Point
-	x
-	y
+	x::Int
+	y::Int
 end
 
 struct Move
-	l1
-	scr
+	l1::Int
+	scr::Float64
 end
 
-#globals
-#points = Vector{Point}(undef, NUMPOINTS) #list of points on the board
-#lines #list of lines in form of tuples of point numbers
-#triangles #list of triangles in form of triples of point numbers
-#linenum # [p1][p2]  number of line between p1 and p2
-#trinum #[p1][p2][p3]  number of triangle with vert p1 p2 p3
-#line2triangles #lists triangles including this line
-#line_cross #[l1][l2] if these two intersect
-#crosslines # lines that cross this one
+mutable struct GraphPoints
+	points #list of points on the board
+	num_points
+end
+
+mutable struct GraphLines
+	linect #num_lines
+	trict #num_triangles
+	lines #list of lines in vector of pairs of point numbers
+	triangles #list of triangles in vector of triples of point numbers
+	linenum # [p1][p2]  number of line between p1 and p2 - array
+	#trinum #[p1][p2][p3]  number of triangle with vert p1 p2 p3 - array
+end
+
+mutable struct GraphCross	
+	line2triangles #lists triangles including this line - vector of variable length vectors
+	crosslines # lines that cross this one - vector of variable length vectors
+end
 	
 mutable struct Board
 	currentPlayer
@@ -64,37 +73,40 @@ end
 function side(pa, pb, pc)
 	#returns 1 if point c is above line a-b
 	#or -1 if below or 0 if on line.
+	result = nothing
 	if pa.x == pb.x
 	#segment is vertical
 		if pa.x == pc.x
-			return 0
+			result = 0
 		elseif pa.x < pc.x
-			return 1
+			result = 1
 		else
-			return -1
+			result = -1
 		end
 	elseif pa.x == pc.x
 	#point is vertical
 		if pc.y > pa.y
-			return 1
+			result = 1
 		else
-			return -1
+			result =-1
 		end
 	else
 		m1 = (pb.y - pa.y)*(pc.x - pa.x)
 		m2 = (pc.y - pa.y)*(pb.x - pa.x)
 		if m2 > m1
-			return 1
+			result = 1
 		elseif m1 > m2
-			return -1
+			result = -1
 		else
-			return 0
+			result = 0
 		end
 	end
+	return result
 end
 
 function intersect(pa, pb, pc, pd)
 	#determines if segment pa-pb intersects pc-pd
+	#is true if segments share endpoint
 	if pa.x > pb.x
 		p1x, p2x = pb, pa
 	else
@@ -128,8 +140,9 @@ function intersect(pa, pb, pc, pd)
 		s4 = side(p1x, p2x, p4x)
 		if s1==0 || s2==0 || s3==0 || s4==0
 			result = true #endpoint on segment
+		else
+			result = (s1 != s2 && s3 != s4)
 		end
-		result = (s1 != s2 && s3 != s4)
 	end
 	return result
 end
@@ -162,10 +175,10 @@ function linelegal(pt1, pt2)
 	threshold = threshold * threshold * den
 	result = true
 	for i = 1:NUMPOINTS
-		if points[i] != pt1 && points[i] != pt2 && points[i].x >= lox && points[i].x <= hix && points[i].y >= loy && points[i].y <= hiy
-			num = dx*(pt1.y - points[i].y) - dy*(pt1.x - points[i].x)
+		if gpoint.points[i] != pt1 && gpoint.points[i] != pt2 && gpoint.points[i].x >= lox && gpoint.points[i].x <= hix && gpoint.points[i].y >= loy && gpoint.points[i].y <= hiy
+			num = dx*(pt1.y - gpoint.points[i].y) - dy*(pt1.x - gpoint.points[i].x)		
 			if num * num < threshold
-				#print(num*num, threshold, pt1, pt2, points[i])
+				#print(num*num, threshold, pt1, pt2, gpoint.points[i])
 				result = false
 			end
 		end
@@ -176,7 +189,7 @@ end
 function trilegal(pt1, pt2, pt3)
 	#returns if triangle does not contain another point
 	result = true
-	for pt0 in points
+	for pt0 in gpoint.points
 		if pt0 != pt1 && pt0 != pt2 && pt0 != pt3
 			if point_in_triangle(pt0, pt1, pt2, pt3)
 				result = false
@@ -196,64 +209,66 @@ function rand_start()
 			pt = Point(x,y)
 			ok = true
 			for j in 1:i-1
-				if ptdist(pt, points[j]) < BUFFERDIST
+				if ptdist(pt, gpoint.points[j]) < BUFFERDIST
 					ok = false
 				end
 			end
 			if ok
-				points[i] = pt
+				gpoint.points[i] = pt
 			end
 		end
 	end
 end
 
+function test_start()
+	#points = [Point(15,45),Point(20,110),Point(90,130),Point(130,50),Point(75,20),Point(65,80)]
+	gpoint.points = [Point(92,69),Point(169,49),Point(534,57),Point(248,79),Point(409,76),Point(150,160),Point(328,148),Point(516,161),Point(107,251),Point(185,287),Point(253,256),Point(384,225),Point(488,264),Point(331,313),Point(413,335),Point(68,400),Point(156,386),Point(266,398),Point(353,405),Point(507,394)]
+end
+
 function init1()
 	#precompute lists of lines, triangles
-	global linect = 1
+	gline.linect = 1
 	for i = 1:NUMPOINTS
 		for j = i + 1:NUMPOINTS
-			if linelegal(points[i], points[j])
-				linenum[i,j] = linenum[j,i] = linect
-				push!(lines, [i,j])
-				linect += 1
+			if linelegal(gpoint.points[i], gpoint.points[j])
+				gline.linenum[i,j] = gline.linenum[j,i] = gline.linect
+				push!(gline.lines, [i,j])
+				gline.linect += 1
 			end
 		end
 	end
-	global trict = 1
+	gline.trict = 1
 	for i = 1:NUMPOINTS
 		for j = i + 1:NUMPOINTS
 			for k = j + 1:NUMPOINTS
-				l1 = linenum[i,j]
-				l2 = linenum[i,k]
-				l3 = linenum[j,k]
+				l1 = gline.linenum[i,j]
+				l2 = gline.linenum[i,k]
+				l3 = gline.linenum[j,k]
 				if l1 > -1 && l2 > -1 && l3 > -1
-					if trilegal(points[i], points[j], points[k])
-						 trinum[i,j,k] = trinum[j,i,k] = trict
-						 trinum[i,k,j] = trinum[j,k,i] = trict
-						 trinum[k,i,j] = trinum[k,j,i] = trict
-						 push!(triangles, [i,j,k])
-						 #line2triangles[l1].append(trict)
-						 #line2triangles[l2].append(trict)
-						 #line2triangles[l3].append(trict)
-						 trict += 1
+					if trilegal(gpoint.points[i], gpoint.points[j], gpoint.points[k])
+						 #gline.trinum[i,j,k] = gline.trinum[j,i,k] = gline.trict
+						 #gline.trinum[i,k,j] = gline.trinum[j,k,i] = gline.trict
+						 #gline.trinum[k,i,j] = gline.trinum[k,j,i] = gline.trict
+						 push!(gline.triangles, [i,j,k])
+						 gline.trict += 1
 					end
 				end
 			end
 		end
 	end
-	linect-=1
-	trict-=1
-	println(linect, " ", trict)	
+	gline.linect-=1
+	gline.trict-=1
 end
 
 function init2()
 	#determine line crosses
-	for l1 = 1:linect
-		pa = points[lines[l1][1]]
-		pb = points[lines[l1][2]]
-		for l2 = l1 + 1:linect
-			pc = points[lines[l2][1]]
-			pd = points[lines[l2][2]]
+	line_cross = trues(gline.linect, gline.linect)
+	for l1 = 1:gline.linect
+		pa = gpoint.points[gline.lines[l1][1]]
+		pb = gpoint.points[gline.lines[l1][2]]
+		for l2 = l1 + 1:gline.linect
+			pc = gpoint.points[gline.lines[l2][1]]
+			pd = gpoint.points[gline.lines[l2][2]]
 			if pa == pc || pa == pd || pb == pc || pb == pd
 				line_cross[l1,l2] = line_cross[l2,l1] = false
 			else
@@ -261,20 +276,23 @@ function init2()
 			end
 		end
 	end
-	for l1 = 1:linect
-		for l2 = l1 + 1:linect
+	for l1 = 1:gline.linect
+		for l2 = 1:gline.linect
 			if line_cross[l1,l2]
-				push!(crosslines[l1], l2)
+				push!(gcross.crosslines[l1], l2)
 			end
 		end
 	end
-	for t1 = 1:trict
-		l1 = triangles[t1][1]
-		l2 = triangles[t1][2]
-		l3 = triangles[t1][3]
-		push!(line2triangles[l1], t1)
-		push!(line2triangles[l2], t1)
-		push!(line2triangles[l3], t1)
+	for t1 = 1:gline.trict
+		p1 = gline.triangles[t1][1]
+		p2 = gline.triangles[t1][2]
+		p3 = gline.triangles[t1][3]
+		l1 = gline.linenum[p1,p2]
+		l2 = gline.linenum[p1,p3]
+		l3 = gline.linenum[p2,p3]
+		push!(gcross.line2triangles[l1], t1)
+		push!(gcross.line2triangles[l2], t1)
+		push!(gcross.line2triangles[l3], t1)
 	end	
 end
 
@@ -284,9 +302,9 @@ function clear_board(b1)
 	b1.turn = 1
 	b1.winner = -1
 	b1.score = [0,0,0]
-	b1.linecolor = [0 for _ in 1:linect]  #0, 1, 2 player
-	b1.trifilled = [0 for _ in 1:trict] #0,1,2,3 sides
-	b1.tricolor = [0 for _ in 1:trict] #0, 1, 2 player
+	b1.linecolor = [0 for _ in 1:gline.linect]  #0, 1, 2 player
+	b1.trifilled = [0 for _ in 1:gline.trict] #0,1,2,3 sides
+	b1.tricolor = [0 for _ in 1:gline.trict] #0, 1, 2 player
 	b1.trimade = false
 	b1.history = []
 end	
@@ -295,13 +313,13 @@ function legalline(b1, l1)
 	#returns if line is a valid move
 	result = true	
 	if l1 == -1
-		println("-1")
+		#println("-1")
 		result = false #not valid line
 	elseif b1.linecolor[l1] > 0
 		#print(">0")
 		result = false #already played
 	else
-		for l2 in crosslines[l1]
+		for l2 in gcross.crosslines[l1]
 			if b1.linecolor[l2] > 0
 				#println("X")
 				result =  false #intersects a line on board
@@ -337,7 +355,7 @@ function get_score2(b1, line1)
 	value  = [1, 6, 100]
 	scr = rand(Float64) / 10.0
 	tf = 0
-	for tr in line2triangles[line1]
+	for tr in gcross.line2triangles[line1]
 		tf += value[b1.trifilled[tr]+1]
 	end
 	scr += tf
@@ -350,8 +368,8 @@ function make_move(b1, line1)
 	b1.linecolor[line1] = b1.currentPlayer
 	b1.trimade = false
 	#b1.zhash ^= zobrist1[line1][b1.currentPlayer-1]
-	for tr in line2triangles[line1]
-		b1.trifilled[tr] += 1
+	for tr in gcross.line2triangles[line1]
+		b1.trifilled[tr] += 1	
 		if b1.trifilled[tr] == 3
 			b1.tricolor[tr] = b1.currentPlayer
 			b1.score[b1.currentPlayer] += 1
@@ -370,7 +388,7 @@ function remove(b1, line1)
 	b1.currentPlayer = 3 - b1.currentPlayer
 	b1.linecolor[line1] = 0
 	#b1.zhash ^= zobrist1[line1][b1.currentPlayer-1]
-	for tr in line2triangles[line1]
+	for tr in gcross.line2triangles[line1]
 		if b1.trifilled[tr] == 3
 			b1.tricolor[tr] = 0
 			b1.score[b1.currentPlayer] -= 1
@@ -390,7 +408,7 @@ function undo(b1)
 	b1.currentPlayer = 3 - b1.currentPlayer
 	b1.linecolor[line1] = 0
 	#b1.zhash ^= zobrist1[line1][b1.currentPlayer-1]
-	for tr in line2triangles[line1]
+	for tr in gcross.line2triangles[line1]
 		if b1.trifilled[tr] == 3
 			b1.tricolor[tr] = 0
 			b1.score[b1.currentPlayer] -= 1
@@ -403,10 +421,10 @@ end
 function generate_moves(b1)
 	#generates all legal moves for player
 	smoves = Vector{Move}(undef, 0)
-	for l1 in 1:linect
+	for l1 in 1:gline.linect
 		if legalline(b1, l1)
 			scr = get_score2(b1, l1)
-			push!(smoves, Move(scr,l1))
+			push!(smoves, Move(l1, scr))
 		end
 	end
 	return smoves
@@ -423,26 +441,21 @@ function rand_move(b1)
 	return l1
 end
 	
-points = Vector{Point}(undef, NUMPOINTS) 	
 board1 = Board(0,0,0,[0,0,0],Vector{Int},Vector{Int},Vector{Int},false,Vector{Int},0)
-rand_start()
+gpoint = GraphPoints(Vector{Point}(undef, NUMPOINTS), NUMPOINTS)	
+#rand_start()
+test_start()
 
-#globals
-linect = 0
-lines = Vector{Int}[] #vector of pairs
-linenum = fill(-1, (NUMPOINTS, NUMPOINTS)) #array
-trict = 0
-triangles = Vector{Int}[] #vector of triples
-trinum = fill(-1, (NUMPOINTS, NUMPOINTS, NUMPOINTS)) #array
+gline = GraphLines(0,0,Vector{Int}[],Vector{Int}[],fill(-1, (NUMPOINTS, NUMPOINTS)))
 init1()
-println(linect, ",", trict)
+println(gline.linect, " lines, ", gline.trict, " triangles")
 
-line_cross = trues(linect, linect) #array
-crosslines = [Vector{Int}(undef,0) for _ in 1:linect] #vector of variable length vectors
-line2triangles = [Vector{Int}(undef,0) for _ in 1:linect]
+gcross = GraphCross([Vector{Int}(undef,0) for _ in 1:gline.linect], [Vector{Int}(undef,0) for _ in 1:gline.linect])	
 init2()
-#zobrist1 = [[0 for _ in range(2)] for _ in range(linect)]
-#zobrist2 = [[0 for _ in range(2)] for _ in range(trict)]
+
+#zobrist1 = [[0 for _ in range(2)] for _ in range(gline.linect)]
+#zobrist2 = [[0 for _ in range(2)] for _ in range(gline.trict)]
+#globals
 players = [0,0]
 pt1 = -1
 clear_board(board1)
@@ -458,8 +471,8 @@ end
 
 function draw_line(widget, line, player)
     ctx = getgc(widget)
-	pt1 = points[lines[line][1]]
-	pt2 = points[lines[line][2]]    
+	pt1 = gpoint.points[gline.lines[line][1]]
+	pt2 = gpoint.points[gline.lines[line][2]]    
     move_to(ctx, pt1.x, pt1.y)
 	if player == 1
 		set_source_rgb(ctx, 0.2, 0.2, 0.8)
@@ -474,13 +487,13 @@ end
 
 function draw_triangle(widget, tr, player)
     ctx = getgc(widget)
-	pt1 = points[triangles[tr][1]]
-	pt2 = points[triangles[tr][2]]
-	pt3 = points[triangles[tr][3]] 
-	move_to(ctx, x1, y1)
-	line_to(ctx, x2, y2)
-	line_to(ctx, x3, y3)
-	line_to(ctx, x1, y1)
+	pt1 = gpoint.points[gline.triangles[tr][1]]
+	pt2 = gpoint.points[gline.triangles[tr][2]]
+	pt3 = gpoint.points[gline.triangles[tr][3]] 
+	move_to(ctx, pt1.x, pt1.y)
+	line_to(ctx, pt2.x, pt2.y)
+	line_to(ctx, pt3.x, pt3.y)
+	line_to(ctx, pt1.x, pt1.y)
 	set_line_width(ctx, LWIDTH)
 	if (player == 1)
 		set_source_rgb(ctx, 0.1, 0.1, 0.6)
@@ -490,29 +503,33 @@ function draw_triangle(widget, tr, player)
 	end
 	fill_preserve(ctx)			
 	stroke(ctx)
+	#close_path(ctx);
+	#stroke_preserve(ctx);
+	#fill(ctx);	
 end
 
 function display_move(widget, l1)
 	player = 3 - board1.currentPlayer #already incremented player
 	draw_line(widget, l1, player)		
-	for tr in line2triangles[l1]
+	for tr in gcross.line2triangles[l1]
 		if board1.trifilled[tr] == 3
-			p1 = triangles[tr][1]
-			p2 = triangles[tr][2]
-			p3 = triangles[tr][3]
-			l1 = linenum[p1,p2]		
-			l2 = linenum[p1,p3] 
-			l3 = linenum[p2,p3]
+			p1 = gline.triangles[tr][1]
+			p2 = gline.triangles[tr][2]
+			p3 = gline.triangles[tr][3]
+			l1 = gline.linenum[p1,p2]		
+			l2 = gline.linenum[p1,p3] 
+			l3 = gline.linenum[p2,p3]
 			draw_triangle(widget, tr, player)
-			draw_line(l1, board1.linecolor[l1]) 
-			draw_line(l2, board1.linecolor[l2]) 
-			draw_line(l3, board1.linecolor[l3]) 
+			draw_line(widget, l1, board1.linecolor[l1]) 
+			draw_line(widget, l2, board1.linecolor[l2]) 
+			draw_line(widget, l3, board1.linecolor[l3]) 
 			#label1.configure(text=str(self.Board.score[1]))
 			#label2.configure(text=str(self.Board.score[2]))
 		end
 	end
+	reveal(widget)	
 	smoves = generate_moves(board1)
-	s = size(smoves)
+	s = size(smoves,1)
 	getscr(m::Move) = m.scr
 	sort(smoves, by=getscr,  rev=true)	
 	println("turn", board1.turn, " len", s)
@@ -532,58 +549,63 @@ end
 function hellogtkapp()
     # design gui layout
 
-    win = GtkWindow("Triangles", 800,600)
-    #vbox = GtkBox(:v)
+    win = GtkWindow("Triangles", 800,700)
     grid = GtkGrid()
-    #push!(win, vbox)
     label1 = GtkLabel("score 0")
     label2 = GtkLabel("score 0")
     GAccessor.justify(label1, Gtk.GConstants.GtkJustification.CENTER)
-    #push!(vbox, label1)
-    #push!(vbox, label2)
     grid[1,1] = label1
-    grid[2,1] = label2
-    button1 = GtkButton("Click Me!")
-    button2 = GtkButton("Not Me!")
-    #push!(vbox, button1)
-    #push!(vbox, button2)
-    grid[1,2] = button1
-    grid[2,2] = button2
-    canv = @GtkCanvas()
-    #push!(vbox, canv)
-    #set_gtk_property!(vbox,:expand,canv,true)   
-    #canv->set_size_request(200, 200)
-    set_gtk_property!(canv, :expand, true)
-    grid[1:2,3:4] = canv
+    grid[4,1] = label2
+    button1 = GtkButton("Quit")
+    button2 = GtkButton("New Game")
+    grid[2,1] = button1
+    grid[3,1] = button2    
+    button3 = GtkButton("Save")
+    button4 = GtkButton("Load")
+    grid[1,2] = button3
+    grid[2,2] = button4 
+    button5 = GtkButton("Stop")
+    button6 = GtkButton("Go")               
+    grid[3,2] = button5
+    grid[4,2] = button6     
+    button7 = GtkButton("Rewind")
+    button8 = GtkButton("Back")
+    grid[1,3] = button7
+    grid[2,3] = button8    
+    button9 = GtkButton("Forward")
+    button10 = GtkButton("FFwd")
+    grid[3,3] = button9
+    grid[4,3] = button10     
 
-	#set_gtk_property!(grid, :column_homogeneous, true)    
+    
+    canv = @GtkCanvas()
+    set_gtk_property!(canv, :expand, true)
+    grid[1:4,4] = canv  
 	push!(win, grid)
-	#push!(vbox, canv)
-	#push!(win, vbox)
     showall(win)
     
     @guarded draw(canv) do widget
         ctx = getgc(canv)
         h = height(canv)
         w = width(canv)
-        println("hi",h," by ",w)
+        println(h," by ",w)
         
-		for pt in points
+		for pt in gpoint.points
 			draw_circle(widget, pt)  
 		end  
-		for tr = 1:trict
+		for tr = 1:gline.trict
 			p = board1.tricolor[tr] 
 			if p > 0	
-				p1 = triangles[tr][1]
-				p2 = triangles[tr][2]
-				p3 = triangles[tr][3]
-				l1 = linenum[p1,p2]		
-				l2 = linenum[p1,p3] 
-				l3 = linenum[p2,p3]
+				p1 = gline.triangles[tr][1]
+				p2 = gline.triangles[tr][2]
+				p3 = gline.triangles[tr][3]
+				l1 = gline.linenum[p1,p2]		
+				l2 = gline.linenum[p1,p3] 
+				l3 = gline.linenum[p2,p3]
 				draw_triangle(widget, tr, p)
 			end
 		end
-		for l1 = 1:linect
+		for l1 = 1:gline.linect
 			p = board1.linecolor[l1] 
 			if p > 0
 				draw_line(widget, l1, p)
@@ -596,34 +618,68 @@ function hellogtkapp()
     end
     
 	id = signal_connect(button1, "clicked") do widget
+		if board1.rewind()
+			clear_surface()
+			players[1] = 0
+			players[2] = 0
+		end
+	end
+	id = signal_connect(button2, "clicked") do widget
 		 println(widget, " was clicked!")
 	end
+	id = signal_connect(button3, "clicked") do widget
+		 println(widget, " was clicked!")
+	end
+	id = signal_connect(button4, "clicked") do widget
+		 println(widget, " was clicked!")
+	end
+	id = signal_connect(button5, "clicked") do widget
+		 println(widget, " was clicked!")
+	end
+	id = signal_connect(button6, "clicked") do widget
+		 println(widget, " was clicked!")
+	end
+	id = signal_connect(button7, "clicked") do widget
+		if board1.rewind()
+			clear_surface()
+			players[1] = 0
+			players[2] = 0
+		end
+	end
+	id = signal_connect(button8, "clicked") do widget
+		if board1.ffw()
+			clear_surface()
+			players[1] = 0
+			players[2] = 0
+		end
+	end
+	id = signal_connect(button9, "clicked") do widget
+		 println(widget, " was clicked!")
+	end
+	id = signal_connect(button10, "clicked") do widget
+		 println(widget, " was clicked!")
+	end									
         
     canv.mouse.button1press = @guarded (widget, event) -> begin
 		ptc = Point(round(Int, event.x), round(Int, event.y))
-		global pt1 = -1
-        println(ptc)		
+		global pt1 = -1	
 		for i in 1:NUMPOINTS
-			if ptdist(ptc, points[i]) < CLICKRAD
+			if ptdist(ptc, gpoint.points[i]) < CLICKRAD
 				pt1 = i
 			end
-		end
-        println("L ",pt1)		
+		end		
 	end
     
     canv.mouse.button1release = @guarded (widget, event) -> begin
 		ptc = Point(round(Int, event.x), round(Int, event.y))
-        println(ptc)
-        println(pt1)
-		
 		pt2 = -1
 		for i in 1:NUMPOINTS
-			if ptdist(ptc, points[i]) < CLICKRAD
+			if ptdist(ptc, gpoint.points[i]) < CLICKRAD
 				pt2 = i
 			end
 		end
 		if pt1 > -1 && pt2 > -1 && pt1 != pt2
-			l1 = linenum[pt1, pt2]
+			l1 = gline.linenum[pt1, pt2]
 			if legalline(board1, l1)
 				make_move(board1, l1)
 				display_move(widget, l1)
@@ -641,5 +697,40 @@ function hellogtkapp()
 
 end
 
+function testfunctions()
+	p1 = Point(1,1)
+	p2 = Point(2,6)
+	p3 = Point(3,5)
+	p4 = Point(4,1)
+	p5 = Point(6,3)
+	p6 = Point(8,5)
+	println(ptdist(p1,p2)) #5.0990195135927845
+	println(pt_line_dist(p1, p2, p3)) #1.1766968108291043
+
+	println(side(p1, p2, p3)) #-1
+	println(side(p1, p3, p2)) # 1
+	println(side(p4, p5, p6)) # 0
+	#returns 1 if point c is above line a-b
+	#or -1 if below or 0 if on line.
+	println(intersect(p1, p3, p2, p4)) #t
+	println(intersect(p1, p3, p2, p6)) #f
+	println(intersect(p4, p5, p5, p6)) #t
+	println(intersect(p1, p4, p2, p5)) #f
+
+	println(point_in_triangle(p3, p2, p4, p6)) #t
+	println(point_in_triangle(p1, p2, p4, p6)) #f
+	println(point_in_triangle(p5, p2, p4, p6)) #t
+
+	println(sign(p2, p1, p3)) #+
+	println(sign(p4, p1, p3)) #-
+	#returns number indicating side of p1 on segment p2-p3
+	
+	gpoint.points[1] = p5
+	println(linelegal(p4, p6))#f
+	
+end
+
 hellogtkapp()
+#testfunctions()
+
 
