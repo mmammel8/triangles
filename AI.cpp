@@ -1,6 +1,7 @@
 #include "AI.h"
 #include <unordered_map>
 #include <sys/time.h>
+#include <assert.h>
 using namespace std;
 
 /*
@@ -38,16 +39,19 @@ int gettimeofday(struct timeval *tv, struct timezone *tz)
 Node::Node()
 {
 	nchildren = 0;
-	nchildex = 0;
+	nmoves = 0;
 	N = 0.0;
 	Q = 0.0;
 	parent = NULL;
 	child[0] = NULL;
-	filled = false;
+	depth = 0;
+	move = -1;
 }
 Node::~Node()
 {
 	nchildren = 0;
+	nmoves = 0;
+	parent = NULL;
 }
 
 AI::AI()
@@ -140,7 +144,7 @@ double AI::MinValue(double alpha, double beta, int depth)
 				if (v <= NINF + EPS)
 				{
 					//no more moves from here
-					v = aiBoard->get_score();
+					v = aiBoard->get_score0();
 				}
 			}
 			else
@@ -227,7 +231,7 @@ double AI::MaxValue(double alpha, double beta, int depth)
 				if (v >= PINF - EPS)
 				{
 					//no more moves from here
-					v = aiBoard->get_score();
+					v = aiBoard->get_score0();
 				}
 			}
 			else
@@ -301,161 +305,100 @@ void AI::ABSearch(int nmove)
 	std::cout << " time: " << duration.count() << std::endl;	
 }
 		
-int AI::randMove()
-{
-	bmove = aiBoard->rand_move();
-	bscr = 0.0;
-	return bmove;
-}
-	
 int AI::DefaultPolicy()
 {
 	mcBoard->copyBd(aiBoard);
-	mcBoard->playout();
-	return mcBoard->get_score();
+	mcBoard->playout2();
+	return mcBoard->get_score0();
 
 }
 
 void AI::Backup(Node *v, double delta)
 {
+	double psign;
 	while (v != NULL)
 	{
+		psign = aiBoard->currentPlayer * 2 - 3.0;	
 		v->N += 1.0;
-		v->Q += delta;
-		if (v->move > -1 && v->parent != NULL)
+		v->Q += delta * psign;	
+		assert(v->N > 0.0 && v->N < 1.0e+24);
+		if (v->move > -1)
 			aiBoard->remove(v->move);
 		v = v->parent;
 	}
 
 }
 
-Node* AI::MoreChild(Node *v, double c)
+Node* AI::SelectChild(Node *v, double c)
 {
 	double val, logterm, maxv = -1.0E12;
 	Node *ch;
 	int maxi = 0;
 
 	logterm = 2.0 * log(v->N);
+	assert(v->nchildren > 0);
 	for (int i = 0; i < v->nchildren; ++i)
 	{
 		ch = v->child[i];
-		if (ch->N > 0.0)
+		assert(ch->N > 0.0 && ch->N < 1.0e+24);
+		val = ch->Q / ch->N + c * sqrt(logterm / ch->N);
+		if (val > maxv)
 		{
-			val = ch->Q / ch->N + c * sqrt(logterm / ch->N);
-			if (val > maxv)
-			{
-				maxv = val;
-				maxi = i;
-			}
-		}
-		else
-		{
-			std::cout << "a" << ch->Q << "," << ch->N << std::endl;
+			maxv = val;
+			maxi = i;
 		}
 	}
 	return v->child[maxi];
 
 }
 
-Node* AI::FewChild(Node *v, double c)
+Node* AI::Expand(Node *v, int l1)
 {
-	double val,logterm, minv = 1.0E12;
-	Node *ch;
-	int mini = 0;
-
-	logterm = 2.0 * log(v->N);
-	for (int i = 0; i < v->nchildren; ++i)
-	{
-		ch = v->child[i];
-		if (ch->N > 0.0)
-		{
-			val= ch->Q / ch->N - c*sqrt(logterm / ch->N);
-			if (val < minv)
-			{
-				minv = val;
-				mini = i;
-			}
-		}
-		else
-		{
-			std::cout << "b" << ch->Q << "," << ch->N << std::endl;
-		}		
-	}
-	return v->child[mini];
-
-}
-
-Node* AI::Expand(Node *v)
-{
-	int i, m, nmove, mv; 
-	int movelist[aiBoard->MAXLINES];
+	int i, m, mv;
 	Node *v2;
 
-	if (v->nchildex == 0)
-	{
-		//genMoves
-		int nmove = aiBoard->generate_moves(movelist);
-		if (nmove > 0)
-		{
-			v->filled = false;
-			for (int i = 0; i < nmove; ++i)
-			{
-				v2 = &narray[nodeCt++];
-				v->child[v->nchildren++] = v2;
-				v2->parent = v;
-				v2->move = movelist[i];
-				v2->depth = depth;
-			}
-		}
-		else
-			v->filled = true;
-	} 
-	if (!v->filled && v->nchildren > 0)
-	{
-		mv = JKISS() % v->nchildren; //pick untried action
-		v2 = v->child[mv];
-		while (v2->N > 0.0)
-		{
-			mv++;
-			if (mv >= v->nchildren)
-				mv = 0;
-			v2 = v->child[mv];
-		}
-		v->nchildex++;
-		if (v2->move > -1)
-			aiBoard->make_move(v2->move);
-		depth++;
-		if (depth > maxDepth)
-			maxDepth = depth;
-		v = v2;
-	} 
-
-	return v;
+	v2 = &narray[nodeCt++];
+	v->child[v->nchildren++] = v2;
+	v2->parent = v;
+	v2->depth = v->depth + 1;								
+	if (v2->depth > maxDepth)
+		maxDepth = v2->depth;
+	v2->move = l1;
+	v2->nmoves = aiBoard->generate_moves(v2->moveQueue);
+	assert(v2->nmoves < 256);
+	v2->N = 0.0;
+	v2->Q = 0.0;
+	v2->nchildren = 0;
+	
+	return v2;
 
 }
 
 Node* AI::TreePolicy(Node *v)
 {
-	while (!v->filled)
+	int mv, l1;
+	while (v->nchildren > 0 && v->nmoves == 0)
 	{
-		if (v->nchildex < v->nchildren || v->nchildex == 0)
-		{ //not expanded
-			if (nodeCt > MAXNODE - 256) //getting too close to limit to expand all possible moves
-				return v;
-			else
-				return Expand(v);
-		}
+		v = SelectChild(v,Cp);
+		assert(v->move > -1);
+		aiBoard->make_move(v->move);
+	}
+	if (v->nmoves > 0)
+	{ //not expanded
+		if (nodeCt > MAXNODE - 256 || v->depth >= MAXTREE) 
+		//getting too close to limit to expand all possible moves
+			return v;
 		else
 		{
-		
-			if ((aiBoard->currentPlayer + depth) % 2 == 0)
-				v = MoreChild(v,Cp);
-			else
-				v = FewChild(v,Cp);
-			if (v->move > -1)
-				aiBoard->make_move(v->move);
+			mv = JKISS() % v->nmoves; //pick untried action
+			l1 = v->moveQueue[mv];
+			//remove from untried moves
+			v->moveQueue[mv] = v->moveQueue[--v->nmoves];		
+			assert(l1 > -1);
+			aiBoard->make_move(l1);		
+			return Expand(v, l1);
 		}
-	}
+	}	
 
 	return v;
 }
@@ -465,7 +408,6 @@ int AI::UCTSearch()
 	int ct, nm; 
 	Node *v1;
 	double delta;
-	int movelist[aiBoard->MAXLINES];
 	double time0, time1, timeLimit;
 	struct timeval tv;
 	
@@ -474,64 +416,78 @@ int AI::UCTSearch()
 	narray = new Node[MAXNODE];
 	nodeCt = 0;
 	maxDepth = 0;
-	root->depth = 0;
-	timeLimit = 16.000;
+	//root->depth = 0;
+	//root->move = -1;
+	root->nmoves = aiBoard->generate_moves(root->moveQueue);
+	timeLimit = UTIMELIMIT;
 	bnodes = 0;
-	depth = 1;
 	gettimeofday(&tv, NULL);
 	time1 = time0 = tv.tv_sec + 1e-6 * tv.tv_usec;	
-	nm = aiBoard->generate_moves(movelist);
-	if (nm == 0)
-	{ //pass
-		bscr = NINF;
-		bmove = -1;
+
+	if (aiBoard->turn == 0)
+	{ //make random first move
+		bmove = aiBoard->rand_move();
+		bscr = 0.0;
 	}
 	else
-	{
-		if (aiBoard->turn == 0)
-		{ //make random first move
-			randMove();
-		}
-		else
-		{ //mcsearch
-			ct = 0;
-			do
-			{
-				//filled=false;
-				depth = 1;
-				v1 = TreePolicy(root);
-				delta = (double)DefaultPolicy(); 
-				Backup(v1, delta / 2.0); //gives Q range 0-1
+	{ //mcsearch
+		ct = 0;
+		do
+		{
+			//filled=false;
+			v1 = TreePolicy(root);
+			delta = (double)DefaultPolicy(); 
+			Backup(v1, delta / 5.0); 
 
-				if (++ct%100 == 0)
-				{
-					gettimeofday(&tv, NULL);
-					time1 = tv.tv_sec + 1e-6 * tv.tv_usec;
-					//std::cout << delta << ":" << time1 - time0 << std::endl;
-				}
-			} while (time1 - time0 < timeLimit);
-
-			if (aiBoard->currentPlayer == 1)
-				v1 = MoreChild(root,0.0);
-			else
-				v1 = FewChild(root,0.0);
-			bmove = v1->move;
-			if (v1->N > 0)
-				bscr = (int)(v1->Q * 200.0 / v1->N + 0.5);
-			else
+			if (++ct%100 == 0)
 			{
-				bscr = 0;
-				bmove = -1;
-				std::cout << delta << ":" << time1 - time0 << std::endl;
+				gettimeofday(&tv, NULL);
+				time1 = tv.tv_sec + 1e-6 * tv.tv_usec;
+				//std::cout << delta << ":" << time1 - time0 << std::endl;
 			}
-		} //mcsearch
-	}
-	depth=0;
+		} while (time1 - time0 < timeLimit);
 
+		v1 = SelectChild(root,0.0);
+		bmove = v1->move;
+		if (v1->N > 0)
+			bscr = v1->Q * 5.0 / v1->N;
+		else
+		{
+			bscr = 0;
+			bmove = -1;
+			std::cout << delta << ":" << time1 - time0 << std::endl;
+		}
+	} //mcsearch
+
+	//diagnostics on tree
+	/*
+	float count[MAXTREE+1], ns[MAXTREE+1], nch[MAXTREE+1], nex[MAXTREE+1];
+	for (int d=0; d<= MAXTREE; ++d)
+	{
+		count[d] = 0.0;
+		ns[d] = 0.0;
+		nch[d] = 0.0;
+		nex[d] = 0.0;
+	}
+	for (int i=0; i < nodeCt; ++i)
+	{
+		int d = narray[i].depth;
+		count[d]+=1.0;	
+		ns[d] += narray[i].N;
+		nch[d] += (float)narray[i].nchildren;
+		nex[d] += (float)narray[i].nmoves;
+		if (narray[i].nmoves < 0 || narray[i].nmoves > 256)
+			cout << "ex" << narray[i].nmoves << endl;
+	}
+	for (int d=1; d <= MAXTREE; ++d)
+	{
+		if (count[d] > 0)
+		std::cout << d << ":" << count[d] << ":" << ns[d]/count[d] << ":" << nch[d]/count[d] << ":" << nex[d]/count[d] << std::endl;
+	}
+	*/
 	//cleanup tree
 	delete [] narray;
 	root->nchildren = 0;
-	root->nchildex = 0;
 	root->N = 0.0;
 	root->Q = 0.0;
 	printf("score: %f, depth: %d, nodes: %d,",bscr, maxDepth, nodeCt);
@@ -554,14 +510,11 @@ int AI::go(Tboard *board0)
 	threat[0] = true;		
 	aiBoard->copyBd(board0);
 
-	//if board0->turn < 1:
-	//randMove()
-
 	if (nmove == 0)
 		return -1;
 	if (nmove == 1)
 		return movelist[0];
-	if (nmove < 17)
+	if (nmove < 87)
 		ABSearch(nmove);
 	else
 		UCTSearch();

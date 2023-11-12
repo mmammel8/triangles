@@ -1,103 +1,106 @@
 using Gtk, Graphics
 
 #constants
-numpoints = 20 #number of points to place
-cwidth = 800 #width of board
-cheight = 600 #height of board
-bufferdist = 80 #minimum distance between points
-lwidth = 4 #line width
-pradius = 9 #point radius
-clickrad = 15 #within this of point to accept click
-maxdepth1 = 12 #limit depth of search in threat
-maxdepth2 = 3 #regular depth of search
-maxbreadth = 24
-pinf = 1000000000.0
-ninf = -1000000000.0
-eps = 1000000.0
+numpoints::UInt16 = 20 #number of points to place
+cwidth::Int32 = 800 #width of board
+cheight::Int32 = 600 #height of board
+bufferdist::Int32 = 80 #minimum distance between points
+lwidth::Int32 = 4 #line width
+pradius::Int32 = 9 #point radius
+clickrad::Int32 = 15 #within this of point to accept click
+maxdepth1::UInt16 = 12 #limit depth of search in threat
+maxdepth2::UInt16 = 3 #regular depth of search
+maxbreadth::UInt16 = 512
+pinf::Float64 = 1000000000.0
+ninf::Float64 = -1000000000.0
+eps::Float64 = 1000000.0
 
 struct Point
-	x::Int64
-	y::Int64
+	x::Int32
+	y::Int32
 end
 
 struct Move
-	l1::Int64
+	l1::UInt16
 	scr::Float64
 end
 
 mutable struct GraphPoints
-	points #vector of points on the board
+	points::Vector{Point}
 end
 
 mutable struct GraphLines
-	linect::Int64 #num_lines
-	trict::Int64 #num_triangles
-	lines #list of lines in vector of pairs of point numbers
-	triangles #list of triangles in vector of triples of point numbers
-	linenum # array[p1][p2]  number of line between p1 and p2
+	linect::Int #num_lines
+	trict::Int #num_triangles
+	lines::Vector{Vector{UInt16}} #list of lines in vector of pairs of point numbers
+	triangles::Vector{Vector{UInt16}} #list of triangles in vector of triples of point numbers
+	linenum::Array{UInt16} # array[p1][p2]  number of line between p1 and p2
 	#trinum #[p1][p2][p3]  number of triangle with vert p1 p2 p3 - array
 end
 
+
 mutable struct GraphCross	
-	line2triangles #lists triangles including this line - vector of variable length vectors
-	crosslines # lines that cross this one - vector of variable length vectors
+	line2triangles::Vector{Vector{UInt16}} #lists triangles including this line 
+	crosslines::Vector{Vector{UInt16}} # lines that cross this one 
 end
 	
 mutable struct Board
-	currentPlayer::Int64
-	turn::Int64
-	winner::Int64
-	score #vectorFloat64[2]
-	linecolor #vector[linect]
-	trifilled #vector[trict]
-	tricolor #vector[trict]
+	currentPlayer::UInt16
+	turn::UInt16
+	winner::UInt16
+	score::Vector{Float64}
+	linecolor::Vector{UInt16} #vector[linect]
+	trifilled::Vector{UInt16} #vector[trict]
+	tricolor::Vector{UInt16} #vector[trict]
 	trimade::Bool
-	lastturn::Int64
-	history #vector[linect]
-	zhash::Int64
+	lastturn::UInt16
+	history::Vector{UInt16} #vector[linect]
+	zhash::UInt32
 end
 
 mutable struct Node
 	#A node in the game tree. Note wins is always from the viewpoint of playerJustMoved.
-	move::Int64 # = move the move that got us to this node - "None" for the root node
-	parentNode # = parent "nothing" for the root node
-	childNodes
+	move::UInt16 # = move the move that got us to this node
+	player::UInt16	
+	parentNode::Node # = parent "nothing" for the root node
+	childNodes::Vector{Node} 
 	qscore::Float64
 	nvisits::Float64
-	untriedMoves # = state.GetMoves() # future child nodes
-	playerJustMoved::Int64
-	depth::Int64
+	untriedMoves::Vector{UInt16} # = state.GetMoves() # future child nodes
+	depth::UInt16
+	Node() = (x = new(); x.parentNode = x)
 end
 
 mutable struct AIstate
-	bmove::Int64
+	bmove::UInt16
 	bscr::Float64
-	maxDepth::Int64
-	threat
-	count ::Int64
-	zobrist_dict
+	maxDepth::UInt16
+	threat::Vector{Bool}
+	count::UInt32
+	zobrist1::Array{UInt32}
+	zobrist2::Array{UInt32}
 end
 
-function ptdist(pa, pb)
+function ptdist(pa::Point, pb::Point)
 	#return distance between two points
-	dx = pb.x - pa.x
-	dy = pb.y - pa.y
+	dx::Int32 = pb.x - pa.x
+	dy::Int32 = pb.y - pa.y
 	return sqrt(dx*dx + dy*dy)
 end
 
-function pt_line_dist(pa, pb, pc)
+function pt_line_dist(pa::Point, pb::Point, pc::Point)
 	#return distance of pt c from line pa-pb
-	dx = pb.x - pa.x
-	dy = pb.y - pa.y
-	num = dx*(pa.y-pc.y) - dy*(pa.x-pc.x)
-	den = sqrt(dx*dx + dy*dy)
+	dx::Int32 = pb.x - pa.x
+	dy::Int32 = pb.y - pa.y
+	num::Float64 = dx*(pa.y-pc.y) - dy*(pa.x-pc.x)
+	den::Float64 = sqrt(dx*dx + dy*dy)
 	return num / den
 end
 
-function side(pa, pb, pc)
+function side(pa::Point, pb::Point, pc::Point)
 	#returns 1 if point c is above line a-b
 	#or -1 if below or 0 if on line.
-	result = nothing
+	result::Int = 0
 	if pa.x == pb.x
 	#segment is vertical
 		if pa.x == pc.x
@@ -128,7 +131,7 @@ function side(pa, pb, pc)
 	return result
 end
 
-function intersect(pa, pb, pc, pd)
+function intersect(pa::Point, pb::Point, pc::Point, pd::Point)
 	#determines if segment pa-pb intersects pc-pd
 	#is true if segments share endpoint
 	if pa.x > pb.x
@@ -137,7 +140,7 @@ function intersect(pa, pb, pc, pd)
 		p1x, p2x = pa, pb
 	end
 	if pc.x > pd.x
-		p3x, p4x = pd, pc
+		p3x, p4x= pd, pc
 	else
 		p3x, p4x = pc, pd
 	end		
@@ -171,12 +174,12 @@ function intersect(pa, pb, pc, pd)
 	return result
 end
 
-function sign(p1, p2, p3)
+function sign(pt1::Point, pt2::Point, pt3::Point)
 	#returns number indicating side of p1 on segment p2-p3
-	return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+	return (pt1.x - pt3.x) * (pt2.y - pt3.y) - (pt2.x - pt3.x) * (pt1.y - pt3.y)
 end
 
-function pointInTriangle(pt, v1, v2, v3)
+function pointInTriangle(pt::Point, v1::Point, v2::Point, v3::Point)
 	#returns if pt in triangle defined by three verts
 	d1 = sign(pt, v1, v2)
 	d2 = sign(pt, v2, v3)
@@ -186,12 +189,12 @@ function pointInTriangle(pt, v1, v2, v3)
 	return !(has_neg && has_pos)
 end
 
-function lineLegal(pt1, pt2)
+function lineLegal(pt1::Point, pt2::Point)
 	#returns if pt1 to pt2 does not hit another point on board
-	threshold = pradius + 3#+ lwidth
-	dx = pt2.x - pt1.x
-	dy = pt2.y - pt1.y
-	den = dx*dx + dy*dy
+	threshold::Int32 = pradius + 3#+ lwidth
+	dx::Int32 = pt2.x - pt1.x
+	dy::Int32 = pt2.y - pt1.y
+	den::Int32 = dx*dx + dy*dy
 	lox = min(pt1.x, pt2.x) - pradius
 	hix = max(pt1.x, pt2.x) + pradius
 	loy = min(pt1.y, pt2.y) - pradius
@@ -200,7 +203,7 @@ function lineLegal(pt1, pt2)
 	result = true
 	for i = 1:numpoints
 		if gpoint.points[i] != pt1 && gpoint.points[i] != pt2 && gpoint.points[i].x >= lox && gpoint.points[i].x <= hix && gpoint.points[i].y >= loy && gpoint.points[i].y <= hiy
-			num = dx*(pt1.y - gpoint.points[i].y) - dy*(pt1.x - gpoint.points[i].x)		
+			num::Int32 = dx*(pt1.y - gpoint.points[i].y) - dy*(pt1.x - gpoint.points[i].x)		
 			if num * num < threshold
 				#print(num*num, threshold, pt1, pt2, gpoint.points[i])
 				result = false
@@ -210,7 +213,7 @@ function lineLegal(pt1, pt2)
 	return result
 end
 
-function trilegal(pt1, pt2, pt3)
+function trilegal(pt1::Point, pt2::Point, pt3::Point)
 	#returns if triangle does not contain another point
 	result = true
 	for pt0 in gpoint.points
@@ -225,14 +228,14 @@ end
 
 function randStart(gpoint)
 	# rand gen lists of points
-	for i in 1:numpoints
+	for i = 1:numpoints
 		ok = false
 		while !ok
 			x = rand(bufferdist: cwidth-bufferdist-1)
 			y = rand(bufferdist: cheight-bufferdist-1)
-			pt = Point(x,y)
+			pt::Point = Point(x,y)
 			ok = true
-			for j in 1:i-1
+			for j = 1:i-1
 				if ptdist(pt, gpoint.points[j]) < bufferdist
 					ok = false
 				end
@@ -252,8 +255,8 @@ end
 function init1(gline)
 	#precompute lists of lines, triangles
 	gline.linect = 1
-	for i = 1:numpoints
-		for j = i + 1:numpoints
+	for i::UInt16 = 1:numpoints
+		for j::UInt16 = i + 1:numpoints
 			if lineLegal(gpoint.points[i], gpoint.points[j])
 				gline.linenum[i,j] = gline.linenum[j,i] = gline.linect
 				push!(gline.lines, [i,j])
@@ -262,13 +265,13 @@ function init1(gline)
 		end
 	end
 	gline.trict = 1
-	for i = 1:numpoints
-		for j = i + 1:numpoints
-			for k = j + 1:numpoints
+	for i::UInt16 = 1:numpoints
+		for j::UInt16 = i + 1:numpoints
+			for k::UInt16 = j + 1:numpoints
 				l1 = gline.linenum[i,j]
 				l2 = gline.linenum[i,k]
 				l3 = gline.linenum[j,k]
-				if l1 > -1 && l2 > -1 && l3 > -1
+				if l1 > 0 && l2 > 0 && l3 > 0
 					if trilegal(gpoint.points[i], gpoint.points[j], gpoint.points[k])
 						 #gline.trinum[i,j,k] = gline.trinum[j,i,k] = gline.trict
 						 #gline.trinum[i,k,j] = gline.trinum[j,k,i] = gline.trict
@@ -320,15 +323,11 @@ function init2(gcross)
 	end	
 end
 
-function init3(ai1)
-
-end
-
-function clearBoard(b1)
+function clearBoard(b1::Board)
 	#restore to beginning of game
 	b1.currentPlayer = 1
 	b1.turn = 1
-	b1.winner = -1
+	b1.winner = 0
 	b1.score = [0.0,0.0]
 	b1.linecolor = [0 for _ in 1:gline.linect]  #0, 1, 2 player
 	b1.trifilled = [0 for _ in 1:gline.trict] #0,1,2,3 sides
@@ -339,7 +338,7 @@ function clearBoard(b1)
 	b1.zhash = 0
 end	
 
-function copyBoard(b1, b2)
+function copyBoard(b1::Board, b2::Board)
 	#copy b2 to b1
 	b1.currentPlayer = b2.currentPlayer
 	b1.turn = b2.turn
@@ -354,17 +353,17 @@ function copyBoard(b1, b2)
 	b1.zhash = b2.zhash
 end	
 
-function legalLine(b1, l1)
+function legalLine(b1::Board, l1::UInt16)
 	#returns if line is a valid move
 	result = true	
-	if l1 == -1
-		#println("-1")
+	if l1 == 0
+		println("-1")
 		result = false #not valid line
 	elseif b1.linecolor[l1] > 0
 		#print(">0")
 		result = false #already played
 	else
-		for l2 in gcross.crosslines[l1]
+		for l2::UInt16 in gcross.crosslines[l1]
 			if b1.linecolor[l2] > 0
 				#println("X")
 				result =  false #intersects a line on board
@@ -374,7 +373,7 @@ function legalLine(b1, l1)
 	return result
 end	
 
-function findWinner(b1)
+function findWinner(b1::Board)
 	#finds winning player when no moves available
 	#sets b1winner
 	if b1.score[1] > b1.score[2]
@@ -387,19 +386,19 @@ function findWinner(b1)
 	return b1.winner
 end	
 
-function getScore1(b1)
+function getScore1(b1::Board)
 	#evaluates the final board for player 1
 	#returns score
 	scr = b1.score[1] - b1.score[2] + rand(Float64) / 10.0
 	return scr
 end
 
-function getScore2(b1, line1)
+function getScore2(b1::Board, line1::UInt16)
 	#evaluates the line move
 	#returns score
-	value  = [1., 6., 100.]
+	value = [1., 6., 100.]
 	scr = rand(Float64) / 10.0
-	tf = 0.
+	tf = 0.0
 	for tr in gcross.line2triangles[line1]
 		tf += value[b1.trifilled[tr]+1]
 	end
@@ -407,7 +406,7 @@ function getScore2(b1, line1)
 	return scr
 end
 
-function rewind(b1)
+function rewind(b1::Board)
 	savelast = b1.lastturn
 	if b1.turn < 2
 		return false
@@ -420,7 +419,7 @@ function rewind(b1)
 	return true
 end
 
-function ffwd(b1)
+function ffwd(b1::Board)
 	if b1.turn > b1.lastturn
 		return false
 	end	
@@ -428,12 +427,12 @@ function ffwd(b1)
 		savelast = b1.lastturn	
 		line1 = b1.history[b1.turn]
 		makeMove(b1, line1)
-		lastturn = savelast
+		b1.lastturn = savelast
 	end
 	return true
 end
 
-function back(b1)
+function back(b1::Board)
 	if b1.turn < 2
 		return false
 	end
@@ -444,7 +443,7 @@ function back(b1)
 	return true
 end
 
-function ahead(b1)
+function ahead(b1::Board)
 	if b1.turn > b1.lastturn
 		return false
 	end
@@ -455,19 +454,19 @@ function ahead(b1)
 	return true
 end
 
-function makeMove(b1, line1)
+function makeMove(b1::Board, line1::UInt16)
 	#makes the single move line
 	#updates triangles
 	b1.linecolor[line1] = b1.currentPlayer
 	b1.trimade = false
-	#b1.zhash ^= zobrist1[line1][b1.currentPlayer-1]
+	b1.zhash ^= ai1.zobrist1[line1, b1.currentPlayer]
 	for tr in gcross.line2triangles[line1]
 		b1.trifilled[tr] += 1	
 		if b1.trifilled[tr] == 3
 			b1.tricolor[tr] = b1.currentPlayer
 			b1.score[b1.currentPlayer] += 1
 			b1.trimade = true
-			#b1.zhash ^= zobrist2[tr][b1.currentPlayer-1]
+			b1.zhash ^= ai1.zobrist2[tr, b1.currentPlayer]
 		end
 	end	
 	b1.lastturn = b1.turn
@@ -476,17 +475,17 @@ function makeMove(b1, line1)
 	b1.currentPlayer = 3 - b1.currentPlayer
 end
 
-function remove(b1, line1)
+function remove(b1::Board, line1::UInt16)
 	#removes the line
 	#updates triangles
 	b1.currentPlayer = 3 - b1.currentPlayer
 	b1.linecolor[line1] = 0
-	#b1.zhash ^= zobrist1[line1][b1.currentPlayer-1]
+	b1.zhash ^= ai1.zobrist1[line1, b1.currentPlayer]
 	for tr in gcross.line2triangles[line1]
 		if b1.trifilled[tr] == 3
 			b1.tricolor[tr] = 0
 			b1.score[b1.currentPlayer] -= 1
-			#b1.zhash ^= zobrist2[tr][b1.currentPlayer-1]
+			b1.zhash ^= ai1.zobrist2[tr, b1.currentPlayer]
 		end			
 		b1.trifilled[tr] -= 1
 	end
@@ -494,10 +493,10 @@ function remove(b1, line1)
 	b1.lastturn = b1.turn - 1
 end
 
-function generateMoves(b1)
+function generateMoves(b1::Board)
 	#generates all legal moves for player
 	smoves = Vector{Move}(undef, 0)
-	for l1 in 1:gline.linect
+	for l1::UInt16 in 1:gline.linect
 		if legalLine(b1, l1)
 			scr = getScore2(b1, l1)
 			push!(smoves, Move(l1, scr))
@@ -506,9 +505,9 @@ function generateMoves(b1)
 	return smoves
 end
 
-function randMove(b1)
+function randMove(b1::Board)
 	#return a random legal move if any
-	l1 = 0
+	l1::UInt16 = 0
 	smoves = generateMoves(b1)
 	s = size(smoves,1)
 	if s > 0
@@ -517,10 +516,10 @@ function randMove(b1)
 	return l1
 end
 
-function playout(b1)
-	maxmv = 128
-	mv = 0
-	l1 = 0
+function playout(b1::Board)
+	maxmv::UInt16 = 128
+	mv::UInt16 = 0
+	l1::UInt16 = 0
 	while l1 != 0 && mv < maxmv
 		l1 = randMove(b1)
 		if l1 != 0
@@ -532,11 +531,11 @@ end
 
 function nodeInit(onode, state)
 	onode.untriedMoves = [ m.l1 for m in generateMoves(state) ]
-	onode.playerJustMoved = 3 - state.currentPlayer
+	onode.player = state.currentPlayer
 end
 		
-function uctSelectChild(onode, ck)
-	maxchild = 0
+function uctSelectChild(onode, ck::Float64)
+	maxchild::UInt16 = 0
 	maxval = -100000.0
 	logterm = 2.0 * log(onode.nvisits)
 	for cindex = 1:length(onode.childNodes)
@@ -550,12 +549,19 @@ function uctSelectChild(onode, ck)
 	return onode.childNodes[maxchild]
 end
 
-function addChild(onode, m, s)
-	#Remove m from untriedMoves and add a new child node for this move.
-	#Return the added child node
-	n = Node(m, onode, [], 0, 0, [], 0, onode.depth + 1)
+function addChild(onode, m::UInt16, s)
+	#Return child node
+	#n = Node(m, 0, onode, Node[], 0, 0, UInt16[], onode.depth + 1)
+	n::Node = Node()
+	n.move = m
+	n.player = 0
+	n.parentNode = onode
+	n.childNodes = Node[]
+	n.qscore = 0.0
+	n.nvisits = 0.0
+	n.untriedMoves = UInt16[]
+	n.depth = onode.depth + 1
 	nodeInit(n, s)
-	deleteat!(onode.untriedMoves, findall(x -> x == m, onode.untriedMoves))
 	push!(onode.childNodes, n)
 	if onode.depth + 1 > ai1.maxDepth
 		ai1.maxDepth = onode.depth + 1
@@ -563,9 +569,7 @@ function addChild(onode, m, s)
 	return n
 end
 	
-function nodeUpdate(onode, result)
-	#Update this node - one additional visit and result additional wins. 
-	#result must be from the viewpoint of playerJustmoved.
+function nodeUpdate(onode, result::Float64)
 	onode.nvisits += 1.0
 	onode.qscore += result
 end
@@ -574,64 +578,76 @@ function printnode(onode)
 	return "[M:" * string(onode.move) * " W/V:" * string(onode.qscore) * "/" * string(onode.nvisits) * "]"
 end
 
-function uct(rootstate, itermax)
-	rootnode = Node(0, nothing, [], 0, 0, [], 0, 0)
-	state = Board(0,0,0,[0.0,0.0],Vector{Int64},Vector{Int64},Vector{Int64},false,0,Vector{Int64},0)	
+function uct(rootstate, itermax::Int)
+	#rootnode = Node(0, 0, nothing, Node[], 0, 0, UInt16[], 0)
+	rootnode::Node = Node()
+	rootnode.move = 0
+	rootnode.player = 0
+	rootnode.childNodes = Node[]
+	rootnode.qscore = 0.0
+	rootnode.nvisits = 0.0
+	rootnode.untriedMoves = UInt16[]
+	rootnode.depth = 0
+	
+	state = Board(0,0,0,[0.0,0.0],Vector{UInt16}[],Vector{UInt16}[],Vector{UInt16}[],false,0,Vector{UInt16}[],0)	
 	nodeInit(rootnode, rootstate)
-	if rootstate.currentPlayer == 1
-		psign = 1
-	else
-		psign = -1
-	end
 
 	for i = 1:itermax
 		node = rootnode
 		copyBoard(state, rootstate)
-
-		# Select
-		while node.untriedMoves == [] && node.childNodes != [] # node is fully expanded and non-terminal
-			node = uctSelectChild(node, 1.4)
+		# Select while node is fully expanded and non-terminal
+		while node.untriedMoves == [] && node.childNodes != []
+			node = uctSelectChild(node, 1.4)	
 			makeMove(state, node.move)
 		end
 		# Expand
-		if node.untriedMoves != [] # if we can expand (i.e. state/node is non-terminal)
+		if node.untriedMoves != []
 			mi = rand(1:length(node.untriedMoves))
 			m = node.untriedMoves[mi]
+			deleteat!(node.untriedMoves, findall(x -> x == m, node.untriedMoves))			
 			makeMove(state, m)
-			node = addChild(node, m, state) # add child and descend tree
+			node = addChild(node, m, state)
 		end
 		playout(state)
 		# Backpropagate
-		scr = getScore1(state) * psign		
-		while node != nothing # backpropagate from the expanded node and work back to the root node
-			nodeUpdate(node, scr) # state is terminal. Update node with result from POV of node.playerJustMoved
-			node = node.parentNode
+		scr = getScore1(state)
+		while node != nothing
+		#while node != node.parentNode
+			psign = node.player * 2 - 3
+			nodeUpdate(node, scr * psign)
+			if node == node.parentNode
+				node = nothing
+			else
+				node = node.parentNode
+			end
 		end
 	end
-	#println(childrenToString(rootnode))
-	maxchild = 0
-	maxvisit = -1
-	for cindex = 1:length(rootnode.childNodes)
+	maxchild::UInt16 = 0
+	maxvisit::Float64 = 0.0
+	for cindex::UInt16 = 1:length(rootnode.childNodes)
 		c = rootnode.childNodes[cindex]
 		if c.nvisits > maxvisit
 			maxchild = cindex
 			maxvisit = c.nvisits
 		end
 	end
-	return rootnode.childNodes[maxchild].move # return the move that was most visited
+	# return the move that was most visited	
+	return rootnode.childNodes[maxchild].move
 end
 
 getscr(m::Move) = m.scr
 	
-function minValue(alpha, beta, depth)
+function minValue(alpha::Float64, beta::Float64, depth::UInt16)
 	ai1.count += 1
+	depth2::UInt16 = depth + 1	
 	if depth > ai1.maxDepth
 		ai1.maxDepth = depth
 	end
-	minV = pinf
-	movelist = generate_moves(aiBoard)
+	minV::Float64 = pinf
+	v::Float64 = pinf
+	movelist = generateMoves(aiBoard)
 	sort!(movelist, by=getscr, rev=true)
-	nmove = length(movelist)
+	nmove::UInt16 = length(movelist)
 	#print "minmv", nmove
 	if nmove == 0
 		#pass
@@ -640,22 +656,21 @@ function minValue(alpha, beta, depth)
 			ai1.bscr = -1
 		end
 	else
-		#for mv in movelist:
 		for i = 1:min(maxbreadth, length(movelist))
-			mv = movelist[i].l1
-			make_move(aiBoard, mv) #make the move on the current board
+			mv::UInt16 = movelist[i].l1
+			makeMove(aiBoard, mv) #make the move on the current board
 			ai1.threat[depth] = aiBoard.trimade
-			if depth < maxdepth1 && (depth < maxdepth2 || ai1.threat[depth] 
-				|| (depth == maxdepth2 && ai1.threat[depth]))
+			if depth < maxdepth1 && (depth < maxdepth2 || ai1.threat[depth] || 
+				(depth == maxdepth2 && ai1.threat[depth-1]))
 					#v = zobrist_dict[aiBoard.zhash]
-				v = maxValue(alpha, beta, depth+1)
+				v = maxValue(alpha, beta, depth2)
 				if v <= ninf + eps
 					#no more moves from here
-					v = get_score1(aiBoard)
+					v = getScore1(aiBoard)
 				end
 				#zobrist_dict[aiBoard.zhash] = v
 			else
-				v = get_score1(aiBoard)
+				v = getScore1(aiBoard)
 			end
 			remove(aiBoard, mv) #undo move
 			#aiBoard.display()
@@ -680,15 +695,17 @@ function minValue(alpha, beta, depth)
 	return minV
 end
 
-function maxValue(alpha, beta, depth)
+function maxValue(alpha::Float64, beta::Float64, depth::UInt16)
 	ai1.count += 1
+	depth2::UInt16 = depth + 1
 	if depth > ai1.maxDepth
 		ai1.maxDepth = depth
 	end
-	maxV = ninf
-	movelist = generate_moves(aiBoard)
+	maxV::Float64 = ninf
+	v::Float64 = ninf
+	movelist = generateMoves(aiBoard)
 	sort!(movelist, by=getscr, rev=true)
-	nmove = length(movelist)
+	nmove::UInt16 = length(movelist)
 	if nmove == 0
 		#pass
 		if depth == 1
@@ -696,22 +713,21 @@ function maxValue(alpha, beta, depth)
 			ai1.bscr = -1
 		end
 	else
-		#for mv in movelist:
-		for i = 1:min(maxbreadth length(movelist))
-			mv = movelist[i].l1
-			make_move(aiBoard, mv) #make the move on the current board
+		for i = 1:min(maxbreadth, length(movelist))
+			mv::UInt16 = movelist[i].l1
+			makeMove(aiBoard, mv) #make the move on the current board
 			ai1.threat[depth] = aiBoard.trimade
-			if depth < maxdepth1 && (ai1.depth < maxdepth2 || threat[depth] 
-				|| (depth == maxdepth2 && ai1.threat[depth]))
+			if depth < maxdepth1 && (depth < maxdepth2 || ai1.threat[depth] || 
+				(depth == maxdepth2 && ai1.threat[depth-1]))
 					#v = zobrist_dict[aiBoard.zhash]
-				v = minValue(alpha, beta, depth+1)
+				v = minValue(alpha, beta, depth2)
 				if v >= pinf - eps
 					#no more moves from here
-					v = get_score1(aiBoard)
+					v = getScore1(aiBoard)
 				end
 				#zobrist_dict[aiBoard.zhash] = v
 			else
-				v = get_score1(aiBoard)
+				v = getScore1(aiBoard)
 			end
 			remove(aiBoard, mv) #undo move
 			if v > maxV
@@ -737,11 +753,12 @@ function abSearch(aiBoard)
 	ai1.bscr = 0
 	ai1.bmove = 0
 	ai1.count = 0
+	depth::UInt16 = 1
 	#zobrist_dict.clear()
 	if aiBoard.currentPlayer == 1
-		ai1.bscr = maxValue(ninf,pinf,1)
+		ai1.bscr = maxValue(ninf,pinf,depth)
 	else
-		ai1.bscr = minValue(ninf,pinf,1)
+		ai1.bscr = minValue(ninf,pinf,depth)
 	end
 	println("count: ", ai1.count)
 	return ai1.bmove
@@ -756,35 +773,33 @@ function aigo(board0)
 	if aiBoard.turn < 0
 		randMove()
 	else
-		#bmove = uct(ai1, aiBoard, 3000)
+		#ai1.bmove = uct(aiBoard, 8000)
 		ai1.bmove = abSearch(aiBoard)
 	end
 	t2 = time_ns()
-	println(ai1.bscr, ",", ai1.maxDepth, ",", t2-t1)	
+	elapsed = (t2-t1) / 1000000000.0
+	println(ai1.bscr, ",", ai1.maxDepth, ",", elapsed)	
 	return ai1.bmove
 end
-		
-board1 = Board(0,0,0,[0.0,0.0],Vector{Int64},Vector{Int64},Vector{Int64},false,0,Vector{Int64},0)
-aiBoard = Board(0,0,0,[0.0,0.0],Vector{Int64},Vector{Int64},Vector{Int64},false,0,Vector{Int64},0)
+
+board1 = Board(0,0,0,[0.0,0.0],Vector{UInt16}[],Vector{UInt16}[],Vector{UInt16}[],false,0,Vector{UInt16}[],0)
+aiBoard = Board(0,0,0,[0.0,0.0],Vector{UInt16}[],Vector{UInt16}[],Vector{UInt16}[],false,0,Vector{UInt16}[],0)
 gpoint = GraphPoints(Vector{Point}(undef, numpoints))	
 #randStart(gpoint)
 testStart(gpoint)
-
-gline = GraphLines(0,0,Vector{Int64}[],Vector{Int64}[],fill(-1, (numpoints, numpoints)))
+	
+gline = GraphLines(0,0,Vector{UInt16}[],Vector{UInt16}[],Array{UInt16}(undef,numpoints,numpoints) )
 init1(gline)
 println(gline.linect, " lines, ", gline.trict, " triangles")
 
-gcross = GraphCross([Vector{Int64}(undef,0) for _ in 1:gline.linect], [Vector{Int64}(undef,0) for _ in 1:gline.linect])	
+gcross = GraphCross([Vector{UInt16}(undef,0) for _ in 1:gline.linect], [Vector{UInt16}(undef,0) for _ in 1:gline.linect])	
 init2(gcross)
 
-ai1 = AIstate(0, 0.0, 0, [0 for _ in 1:gline.linect], 0, [])
-init3(ai1)
+ai1 = AIstate(0, 0.0, 0, [false for _ in 1:gline.linect], 0, rand(UInt32, (gline.linect,2)), rand(UInt32, (gline.trict,2)))
 
-#zobrist1 = [[0 for _ in range(2)] for _ in range(gline.linect)]
-#zobrist2 = [[0 for _ in range(2)] for _ in range(gline.trict)]
 #globals
 players = [1,0]
-pt1 = -1
+pt1 = 0
 clearBoard(board1)
 
 function drawCircle(widget, pt)
@@ -838,6 +853,11 @@ end
 function clear_surface()
 end
 
+function aiprocess()
+	l1 = aigo(board1)
+	return l1
+end
+
 function displayMove(widget, l1)
 	player = 3 - board1.currentPlayer #already incremented player
 	drawLine(widget, l1, player)		
@@ -869,7 +889,9 @@ function displayMove(widget, l1)
 		#label3.update()		   
 	elseif players[board1.currentPlayer] == 1
 		#canvas.update()
-		l1 = aigo(board1)
+		t1 = Task(aiprocess); schedule(t1)
+		l1 = fetch(t1)
+		#l1 = aiprocess()
 		if l1 != 0
 			makeMove(board1, l1) 
 			displayMove(widget, l1)
@@ -990,8 +1012,8 @@ function hellogtkapp()
 	end									
         
     canv.mouse.button1press = @guarded (widget, event) -> begin
-		ptc = Point(round(Int64, event.x), round(Int64, event.y))
-		global pt1 = -1	
+		ptc = Point(round(UInt16, event.x), round(UInt16, event.y))
+		global pt1 = 0
 		for i in 1:numpoints
 			if ptdist(ptc, gpoint.points[i]) < clickrad
 				pt1 = i
@@ -1000,14 +1022,14 @@ function hellogtkapp()
 	end
     
     canv.mouse.button1release = @guarded (widget, event) -> begin
-		ptc = Point(round(Int64, event.x), round(Int64, event.y))
-		pt2 = -1
+		ptc = Point(round(UInt16, event.x), round(UInt16, event.y))
+		pt2 = 0
 		for i in 1:numpoints
 			if ptdist(ptc, gpoint.points[i]) < clickrad
 				pt2 = i
 			end
 		end
-		if pt1 > -1 && pt2 > -1 && pt1 != pt2
+		if pt1 > 0 && pt2 > 0 && pt1 != pt2
 			l1 = gline.linenum[pt1, pt2]
 			if legalLine(board1, l1)
 				makeMove(board1, l1)
