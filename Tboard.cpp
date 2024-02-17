@@ -149,7 +149,7 @@ bool Tboard::linelegal(Point pt1, Point pt2)
 	//returns if pt1 to pt2 does not hit another point on board
 	double threshold, dx, dy, num, den;
 	int lox, hix, loy, hiy;
-	threshold = PRADIUS + 3; // + LWIDTH/2;
+	threshold = PRADIUS + 1; //LWIDTH/2;
 	dx = pt2.x - pt1.x;
 	dy = pt2.y - pt1.y;
 	den = dx*dx + dy*dy;
@@ -359,13 +359,8 @@ void Tboard::copyBd(Tboard* mainBd)
  	for (int i = 0; i < turn; ++i)
  		history[i] = mainBd->history[i];
  	zhash = mainBd->zhash;
-}
-
-double Tboard::get_score()
-{
-	double scr;
-	scr = score[1] - score[2];
-	return scr;
+	lastturn = mainBd->lastturn;
+	trimade = mainBd->trimade;
 }
 
 int Tboard::get_winner()
@@ -406,6 +401,13 @@ bool Tboard::legalline(int l1)
 	}
 	//std::cout << "ok" << std::endl;
 	return true;
+}
+
+double Tboard::get_score0()
+{
+	double scr;
+	scr = (double)score[1] - (double)score[2];
+	return scr;
 }
 
 double Tboard::get_score1()
@@ -587,36 +589,31 @@ int Tboard::rand_move()
 
 void Tboard::playout2()
 {
-	//random playout until triangle made or maxmoves
-	const int MAXMV = 12;
+	//random playout until maxmoves
+	const int MAXMV = 8;
 	int mv = 0;
 	int l1 = 0;
-	int mades = 0;
 	trimade = false;
-	while (l1 > -1 && mv < MAXMV && mades < 2)
+	bool primade = false;
+	while (l1 > -1 && (mv < MAXMV || trimade || primade))
 	{
+		primade = trimade;	
 		l1 = rand_move();
 		if (l1 > -1)
 			make_move(l1);
-		mv++;
-		if (trimade)
-			mades++;
-		else
-			mades = 0;			
+		mv++;		
 	}
 }
 
 void Tboard::playout()
 {
 	//random playout
-	int mv = 0;
 	int l1 = 0;
 	while (l1 > -1)
 	{
 		l1 = rand_move();
 		if (l1 > -1)
-			make_move(l1);
-		mv++;		
+			make_move(l1);	
 	}
 }
 

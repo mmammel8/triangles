@@ -85,9 +85,9 @@ public:
 	void rand_start();
 	void test_start();
 	void copyBd(Tboard* mainBd);
-	double get_score();
 	int get_winner();
 	bool legalline(int l1);
+	double get_score0();	
 	double get_score1();
 	double get_score2(int line1);
 	bool rewind();
